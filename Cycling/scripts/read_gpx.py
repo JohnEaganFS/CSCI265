@@ -8,14 +8,10 @@ from matplotlib.patches import Rectangle
 
 def boundaries(a, b):
     # get a and b if translated such that a is at the origin
-    b = b - a
+    vector = b - a
 
-    vector = b
-
-    scaling = 1
-
-    point1 = np.array([vector[1], -vector[0]]) * scaling
-    point2 = np.array([-vector[1], vector[0]]) * scaling
+    point1 = np.array([vector[1], -vector[0]])
+    point2 = np.array([-vector[1], vector[0]])
     point3 = point1 + vector
     point4 = point2 + vector
 
@@ -48,6 +44,20 @@ def read_gpx(filename):
 
     return points
 
+def scaleData(data):
+    min_lat = data[:,0].min()
+    max_lat = data[:,0].max()
+    min_lon = data[:,1].min()
+    max_lon = data[:,1].max()
+    min_ele = data[:,2].min()
+    max_ele = data[:,2].max()
+    for i in range(len(data)):
+        data[i][0] = (data[i][0] - min_lat) / (max_lat - min_lat)
+        data[i][1] = (data[i][1] - min_lon) / (max_lon - min_lon)
+        data[i][2] = (data[i][2] - min_ele) / (max_ele - min_ele)
+    
+    return data
+
 def drawPoints(points):
     # Make the markers go from red to blue as the ride progresses
     colors = np.linspace(0, 1, len(points))
@@ -74,21 +84,17 @@ def drawBoundaryPoints(boundaryPoints, points):
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
     for i, bp in enumerate(boundaryPoints):
-        #ax.scatter(bp[0][0], bp[0][1], bp[0][2], c='red')
-        #ax.scatter(bp[1][0], bp[1][1], bp[1][2], c='blue')
-        #ax.scatter(bp[2][0], bp[2][1], bp[2][2], c='green')
-        #ax.scatter(bp[3][0], bp[3][1], bp[3][2], c='yellow')
         # Create lines between points
         # 1 and 2
         ax.plot([bp[0][0], bp[1][0]], [bp[0][1], bp[1][1]], [bp[0][2], bp[1][2]], marker='o', markerfacecolor=(colors[i], 0.0, 0.0), markersize=0.5, color=(colors[i], 0.0, 0.0), linewidth=0.5)
         # 2 and 4
-        #ax.plot([bp[1][0], bp[3][0]], [bp[1][1], bp[3][1]], [bp[1][2], bp[3][2]], c='black')
+        ax.plot([bp[1][0], bp[3][0]], [bp[1][1], bp[3][1]], [bp[1][2], bp[3][2]], c='black')
         # 4 and 3
-        #ax.plot([bp[3][0], bp[2][0]], [bp[3][1], bp[2][1]], [bp[3][2], bp[2][2]], c='black')
+        ax.plot([bp[3][0], bp[2][0]], [bp[3][1], bp[2][1]], [bp[3][2], bp[2][2]], c='black')
         # 3 and 1
-        #ax.plot([bp[2][0], bp[0][0]], [bp[2][1], bp[0][1]], [bp[2][2], bp[0][2]], c='black')
+        ax.plot([bp[2][0], bp[0][0]], [bp[2][1], bp[0][1]], [bp[2][2], bp[0][2]], c='black')
 
-    # ax.scatter(points[:,0], points[:,1], points[:,2], c='black', s=0.1)
+    ax.scatter(points[:,0], points[:,1], points[:,2], c='green', s=5)
 
     plt.show()
 
@@ -108,12 +114,17 @@ if __name__ == "__main__":
     # Remove duplicate points
     data = removeDuplicatePoints(data)
 
+    # Scale the lat/lon and ele coordinates to be in the range [0, 1]
+    data = scaleData(data)
+
+
     # drawPoints(data[:100])
 
     # for point in data:
     #     print(point.lat, point.lon, point.ele)
 
     boundaryPoints = []
+    newData = []
     for i in range(len(data) - 1):
         # if equivalent points, skip
         if data[i][0] == data[i+1][0] and data[i][1] == data[i+1][1]:
@@ -122,8 +133,15 @@ if __name__ == "__main__":
         # ele will be the average of the two points
         ele = (data[i][2] + data[i+1][2]) / 2
         boundaryPoints.append(((bp[0][0], bp[0][1], ele), (bp[1][0], bp[1][1], ele), (bp[2][0], bp[2][1], ele), (bp[3][0], bp[3][1], ele)))
+        newData.append(data[i])
+    newData.append(data[-1])
+
+    start = 500
+    limit = 510
+
+    #print(boundaryPoints[start:limit])
     
-    drawBoundaryPoints(boundaryPoints[0:300], data)
+    drawBoundaryPoints(boundaryPoints[start:limit], data[start:limit])
 
 
 
