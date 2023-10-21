@@ -12,6 +12,10 @@ from stable_baselines3 import DQN
 from stable_baselines3.common.evaluation import evaluate_policy
 from read_gpx import read_gpx, removeDuplicatePoints, scaleData
 
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.utils import set_random_seed
+from stable_baselines3.common.env_util import make_vec_env
+
 
 # Parameters
 max_steps = 500
@@ -231,6 +235,10 @@ class BoundaryEnv(gym.Env):
         self.state_history = [self.state]
 
         return self.observation()
+    
+    def seed(self, seed=None):
+        self.np_random, seed = gym.utils.seeding.np_random(seed)
+        return [seed]
 
     def render(self, mode='human'):
         # print(self.log)
@@ -263,8 +271,6 @@ class BoundaryEnv(gym.Env):
             plt.plot([bp[3][0], bp[2][0]], [bp[3][1], bp[2][1]], c='black')
             # 3 and 1
             plt.plot([bp[2][0], bp[0][0]], [bp[2][1], bp[0][1]], c='black')
-            
-        
         plt.show()
 
     def close(self):
@@ -277,13 +283,30 @@ def one_step(env):
     # Take the action
     observation, reward, done, info = env.step(action)
 
+from typing import Callable
+
+def make_env(env_id: str, rank: int, seed: int = 0) -> Callable:
+    """
+    Utility function for multiprocessed env.
+    
+    :param env_id: (str) the environment ID
+    :param seed: (int) the inital seed for RNG
+    :param rank: (int) index of the subprocess
+    """
+    def _init() -> gym.Env:
+        env = BoundaryEnv()
+        env.seed(seed + rank)
+        return env
+    set_random_seed(seed)
+    return _init
+
 if __name__ == "__main__":
     data = read_gpx("../gpx/Evening_Ride.gpx")
 
     # Remove duplicate points
     data = removeDuplicatePoints(data)
 
-    data = data[100:110]
+    data = data[100:120]
 
     # Scale the lat/lon and ele coordinates to be in the range [0, 1]
     data = scaleData(data)
@@ -291,28 +314,21 @@ if __name__ == "__main__":
     # Convert data to waypoints
     waypoints = np.array([[x[0], x[1]] for x in data])
 
+
+    # Create the vectorized environment
+    n_cpu = 10
+    env = make_vec_env(BoundaryEnv, n_envs=n_cpu, seed=0)
+
     # Create the environment
-    env = BoundaryEnv()
+    # env = BoundaryEnv()
     boundary_points = np.array([boundaries(waypoints[i], waypoints[i+1]) for i in range(len(waypoints) - 1)])
-
-    # # Reset the environment
-    # observation = env.reset()
-
-    # # Run the environment
-    # steps = 10
-
-    # for step in range(steps):
-    #     one_step(env)
-
-    # # Render final environment
-    # env.render(mode='path')
 
     # Model
     model = PPO('MlpPolicy', env, verbose=1)
     # model = DQN('MlpPolicy', env, verbose=1)
 
     # Train the model
-    model.learn(total_timesteps=300000)
+    model.learn(total_timesteps=100000)
 
     # Render
     env.render()
@@ -323,6 +339,7 @@ if __name__ == "__main__":
 
     # Render n episodes of the model
     n = 1
+    env = BoundaryEnv()
     path_trajectories = []
     for episode in range(n):
         obs = env.reset()
