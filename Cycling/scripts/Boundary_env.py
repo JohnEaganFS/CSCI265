@@ -10,19 +10,17 @@ import matplotlib.pyplot as plt
 from stable_baselines3 import PPO
 from stable_baselines3 import DQN
 from stable_baselines3.common.evaluation import evaluate_policy
-from gym.wrappers import FlattenObservation
-from gym.spaces.utils import unflatten
+from read_gpx import read_gpx, removeDuplicatePoints, scaleData
+
 
 # Parameters
-max_steps = 1000
+max_steps = 500
 # waypoints = np.array([[0, 0], [0.5, 0.5], [1, 1], [1.5, 1.5]])
 # waypoints = np.array([[0, 0], [0.5, 0.75], [1, 1], [1.5, 1.5]])
 waypoints = np.array([[0,0], [0, 0.25], [0, 0.5], [0.5, 0.75], [1, 1], [1.5, 1.5]])
 
 # Observations
 observations = ['lat', 'lon', 'speed', 'heading_lat', 'heading_lon', 'next_waypoint_lat', 'next_waypoint_lon']
-#'boundary_point_1_lat', 'boundary_point_1_lon', 'boundary_point_2_lat', 'boundary_point_2_lon', 'boundary_point_3_lat', 'boundary_point_3_lon', 'boundary_point_4_lat', 'boundary_point_4_lon',
-# 'next_bp_1_lat', 'next_bp_1_lon', 'next_bp_2_lat', 'next_bp_2_lon', 'next_bp_3_lat', 'next_bp_3_lon', 'next_bp_4_lat', 'next_bp_4_lon']
 
 def defineObservationSpace():
     lower_bounds = {
@@ -33,22 +31,6 @@ def defineObservationSpace():
         'heading_lon': 0,
         'next_waypoint_lat': -np.inf,
         'next_waypoint_lon': -np.inf
-        # 'boundary_point_1_lat': -np.inf,
-        # 'boundary_point_1_lon': -np.inf,
-        # 'boundary_point_2_lat': -np.inf,
-        # 'boundary_point_2_lon': -np.inf,
-        # 'boundary_point_3_lat': -np.inf,
-        # 'boundary_point_3_lon': -np.inf,
-        # 'boundary_point_4_lat': -np.inf,
-        # 'boundary_point_4_lon': -np.inf,
-        # 'next_bp_1_lat': -np.inf,
-        # 'next_bp_1_lon': -np.inf,
-        # 'next_bp_2_lat': -np.inf,
-        # 'next_bp_2_lon': -np.inf,
-        # 'next_bp_3_lat': -np.inf,
-        # 'next_bp_3_lon': -np.inf,
-        # 'next_bp_4_lat': -np.inf,
-        # 'next_bp_4_lon': -np.inf
     }
     upper_bounds = {
         'lat': 1,
@@ -58,22 +40,6 @@ def defineObservationSpace():
         'heading_lon': 1,
         'next_waypoint_lat': np.inf,
         'next_waypoint_lon': np.inf
-        # 'boundary_point_1_lat': np.inf,
-        # 'boundary_point_1_lon': np.inf,
-        # 'boundary_point_2_lat': np.inf,
-        # 'boundary_point_2_lon': np.inf,
-        # 'boundary_point_3_lat': np.inf,
-        # 'boundary_point_3_lon': np.inf,
-        # 'boundary_point_4_lat': np.inf,
-        # 'boundary_point_4_lon': np.inf,
-        # 'next_bp_1_lat': np.inf,
-        # 'next_bp_1_lon': np.inf,
-        # 'next_bp_2_lat': np.inf,
-        # 'next_bp_2_lon': np.inf,
-        # 'next_bp_3_lat': np.inf,
-        # 'next_bp_3_lon': np.inf,
-        # 'next_bp_4_lat': np.inf,
-        # 'next_bp_4_lon': np.inf
     }
     low = np.array([lower_bounds[key] for key in observations])
     high = np.array([upper_bounds[key] for key in observations])
@@ -203,26 +169,6 @@ class BoundaryEnv(gym.Env):
             self.state['heading_lon'] += self.state['speed'] * dy
             self.state['next_waypoint_lat'] = self.state['waypoints'][self.state['next_waypoint_index']][0]
             self.state['next_waypoint_lon'] = self.state['waypoints'][self.state['next_waypoint_index']][1]
-            # self.state['boundary_point_1_lat'] = self.state['boundary_points'][self.state['current_waypoint_index']][0][0]
-            # self.state['boundary_point_1_lon'] = self.state['boundary_points'][self.state['current_waypoint_index']][0][1]
-            # self.state['boundary_point_2_lat'] = self.state['boundary_points'][self.state['current_waypoint_index']][1][0]
-            # self.state['boundary_point_2_lon'] = self.state['boundary_points'][self.state['current_waypoint_index']][1][1]
-            # self.state['boundary_point_3_lat'] = self.state['boundary_points'][self.state['current_waypoint_index']][2][0]
-            # self.state['boundary_point_3_lon'] = self.state['boundary_points'][self.state['current_waypoint_index']][2][1]
-            # self.state['boundary_point_4_lat'] = self.state['boundary_points'][self.state['current_waypoint_index']][3][0]
-            # self.state['boundary_point_4_lon'] = self.state['boundary_points'][self.state['current_waypoint_index']][3][1]
-            # # try this, if it fails print out the state and the current waypoint index
-            # try:
-            #     self.state['next_bp_1_lat'] = self.state['boundary_points'][self.state['next_waypoint_index']][0][0]
-            #     self.state['next_bp_1_lon'] = self.state['boundary_points'][self.state['next_waypoint_index']][0][1]
-            #     self.state['next_bp_2_lat'] = self.state['boundary_points'][self.state['next_waypoint_index']][1][0]
-            #     self.state['next_bp_2_lon'] = self.state['boundary_points'][self.state['next_waypoint_index']][1][1]
-            #     self.state['next_bp_3_lat'] = self.state['boundary_points'][self.state['next_waypoint_index']][2][0]
-            #     self.state['next_bp_3_lon'] = self.state['boundary_points'][self.state['next_waypoint_index']][2][1]
-            #     self.state['next_bp_4_lat'] = self.state['boundary_points'][self.state['next_waypoint_index']][3][0]
-            #     self.state['next_bp_4_lon'] = self.state['boundary_points'][self.state['next_waypoint_index']][3][1]
-            # except:
-            #     pass
             reward = 20
             # Log these positive rewards
             self.log += f'Positive Reward: {self.state}\n'
@@ -267,30 +213,13 @@ class BoundaryEnv(gym.Env):
         
     def reset(self):
         self.state = {
-            'lat': 0,
-            'lon': 0,
+            'lat': waypoints[0][0],
+            'lon': waypoints[0][1],
             'speed': 0.05,
-            # initialize heading vector to point at next waypoint
             'heading_lat': waypoints[1][0],
             'heading_lon': waypoints[1][1],
             'next_waypoint_lat': waypoints[1][0],
             'next_waypoint_lon': waypoints[1][1],
-            # 'boundary_point_1_lat': boundary_points[0][0][0],
-            # 'boundary_point_1_lon': boundary_points[0][0][1],
-            # 'boundary_point_2_lat': boundary_points[0][1][0],
-            # 'boundary_point_2_lon': boundary_points[0][1][1],
-            # 'boundary_point_3_lat': boundary_points[0][2][0],
-            # 'boundary_point_3_lon': boundary_points[0][2][1],
-            # 'boundary_point_4_lat': boundary_points[0][3][0],
-            # 'boundary_point_4_lon': boundary_points[0][3][1],
-            # 'next_bp_1_lat': boundary_points[1][0][0],
-            # 'next_bp_1_lon': boundary_points[1][0][1],
-            # 'next_bp_2_lat': boundary_points[1][1][0],
-            # 'next_bp_2_lon': boundary_points[1][1][1],
-            # 'next_bp_3_lat': boundary_points[1][2][0],
-            # 'next_bp_3_lon': boundary_points[1][2][1],
-            # 'next_bp_4_lat': boundary_points[1][3][0],
-            # 'next_bp_4_lon': boundary_points[1][3][1],
             'current_waypoint_index': 0,
             'next_waypoint_index': 1,
             'waypoints': waypoints,
@@ -349,6 +278,19 @@ def one_step(env):
     observation, reward, done, info = env.step(action)
 
 if __name__ == "__main__":
+    data = read_gpx("../gpx/Evening_Ride.gpx")
+
+    # Remove duplicate points
+    data = removeDuplicatePoints(data)
+
+    data = data[100:110]
+
+    # Scale the lat/lon and ele coordinates to be in the range [0, 1]
+    data = scaleData(data)
+
+    # Convert data to waypoints
+    waypoints = np.array([[x[0], x[1]] for x in data])
+
     # Create the environment
     env = BoundaryEnv()
     boundary_points = np.array([boundaries(waypoints[i], waypoints[i+1]) for i in range(len(waypoints) - 1)])
@@ -380,7 +322,7 @@ if __name__ == "__main__":
     print(f"mean_reward:{mean_reward:.2f} +/- {std_reward:.2f}")
 
     # Render n episodes of the model
-    n = 10
+    n = 1
     path_trajectories = []
     for episode in range(n):
         obs = env.reset()
@@ -399,22 +341,22 @@ if __name__ == "__main__":
         path = np.array([[state['lat'], state['lon']] for state in trajectory])
         colors = np.linspace(0, 1, len(path))
         plt.scatter(path[:,0], path[:,1], c=colors, cmap='cool', s=0.1)
-    plt.xlim = (0, 1)
-    plt.ylim = (0, 1)
-    plt.grid()
     # Plot the waypoints
-    plt.plot(waypoints[:,0], waypoints[:,1], 'ro')
+    plt.plot(waypoints[:,0], waypoints[:,1], 'ro', markersize=2)
     # Plot the boundary points and lines
     for i, bp in enumerate(boundary_points):
         # Points
-        plt.plot(bp[:,0], bp[:,1], 'bo')
+        plt.plot(bp[:,0], bp[:,1], 'bo', markersize=0.5)
         # Lines
         # 1 and 2
-        plt.plot([bp[0][0], bp[1][0]], [bp[0][1], bp[1][1]], c='black')
+        # plt.plot([bp[0][0], bp[1][0]], [bp[0][1], bp[1][1]], c='black')
         # 2 and 4
-        plt.plot([bp[1][0], bp[3][0]], [bp[1][1], bp[3][1]], c='black')
+        #plt.plot([bp[1][0], bp[3][0]], [bp[1][1], bp[3][1]], c='black')
         # 4 and 3
-        plt.plot([bp[3][0], bp[2][0]], [bp[3][1], bp[2][1]], c='black')
+        #plt.plot([bp[3][0], bp[2][0]], [bp[3][1], bp[2][1]], c='black')
         # 3 and 1
-        plt.plot([bp[2][0], bp[0][0]], [bp[2][1], bp[0][1]], c='black')    
+        #plt.plot([bp[2][0], bp[0][0]], [bp[2][1], bp[0][1]], c='black') 
+    plt.grid()  
+    plt.xlim(-0.5, 1.5)
+    plt.ylim(-0.5, 1.5)
     plt.show()

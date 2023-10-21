@@ -117,31 +117,32 @@ if __name__ == "__main__":
     # Scale the lat/lon and ele coordinates to be in the range [0, 1]
     data = scaleData(data)
 
+    print(data)
 
-    drawPoints(data)
+    # drawPoints(data)
 
     # for point in data:
     #     print(point.lat, point.lon, point.ele)
 
-    boundaryPoints = []
-    newData = []
-    for i in range(len(data) - 1):
-        # if equivalent points, skip
-        if data[i][0] == data[i+1][0] and data[i][1] == data[i+1][1]:
-            continue
-        bp = boundaries(data[i][:2], data[i+1][:2])
-        # ele will be the average of the two points
-        ele = (data[i][2] + data[i+1][2]) / 2
-        boundaryPoints.append(((bp[0][0], bp[0][1], ele), (bp[1][0], bp[1][1], ele), (bp[2][0], bp[2][1], ele), (bp[3][0], bp[3][1], ele)))
-        newData.append(data[i])
-    newData.append(data[-1])
+    # boundaryPoints = []
+    # newData = []
+    # for i in range(len(data) - 1):
+    #     # if equivalent points, skip
+    #     if data[i][0] == data[i+1][0] and data[i][1] == data[i+1][1]:
+    #         continue
+    #     bp = boundaries(data[i][:2], data[i+1][:2])
+    #     # ele will be the average of the two points
+    #     ele = (data[i][2] + data[i+1][2]) / 2
+    #     boundaryPoints.append(((bp[0][0], bp[0][1], ele), (bp[1][0], bp[1][1], ele), (bp[2][0], bp[2][1], ele), (bp[3][0], bp[3][1], ele)))
+    #     newData.append(data[i])
+    # newData.append(data[-1])
 
-    start = 500
-    limit = 510
+    # start = 500
+    # limit = 510
 
-    #print(boundaryPoints[start:limit])
+    # #print(boundaryPoints[start:limit])
     
-    drawBoundaryPoints(boundaryPoints[start:limit], data[start:limit])
+    # drawBoundaryPoints(boundaryPoints[start:limit], data[start:limit])
 
 
 
