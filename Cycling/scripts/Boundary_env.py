@@ -122,7 +122,8 @@ def boundaries(a, b):
     return [point1, point2, point3, point4]
 
 def checkIfInRectangle(point, boundary_points):
-    ''' Check if a point is in a rectangle defined by the boundary points.
+    ''' 
+    Check if a point is in a rectangle defined by the boundary points.
     '''
     # Get the boundary points
     a, b, d, c = boundary_points[0], boundary_points[1], boundary_points[2], boundary_points[3]
@@ -165,7 +166,7 @@ class BoundaryEnv(gym.Env):
             self.state['heading_lon'] += self.state['speed'] * dy
             self.state['next_waypoint_lat'] = self.state['waypoints'][self.state['next_waypoint_index']][0]
             self.state['next_waypoint_lon'] = self.state['waypoints'][self.state['next_waypoint_index']][1]
-            reward = 20
+            reward = 5
             # Log these positive rewards
             self.log += f'Positive Reward: {self.state}\n'
         # Check if the agent is within the current boundary
@@ -175,7 +176,7 @@ class BoundaryEnv(gym.Env):
             self.state['lon'] += self.state['speed'] * dy
             self.state['heading_lat'] += self.state['speed'] * dx
             self.state['heading_lon'] += self.state['speed'] * dy
-            reward = 0
+            reward = -0.1
         # If it isn't in either, then the agent is outside the boundaries
         else:
             # Move the agent back to the previous waypoint
@@ -190,7 +191,7 @@ class BoundaryEnv(gym.Env):
             self.state['heading_lon'] += self.state['speed'] * dy
 
             # Reset penalty
-            reward = -1
+            reward = -0.1
 
         # Update the speed
         updateSpeed(self.state)
@@ -198,15 +199,16 @@ class BoundaryEnv(gym.Env):
         # Apply living penalty
         # reward -= 0.1
 
-        # Calculate distance from current position to next waypoint
-        distance = np.linalg.norm(np.array([self.state['lat'], self.state['lon']]) - np.array([self.state['next_waypoint_lat'], self.state['next_waypoint_lon']]))
-        old_distance = np.linalg.norm(np.array([self.state_history[-1]['lat'], self.state_history[-1]['lon']]) - np.array([self.state_history[-1]['next_waypoint_lat'], self.state_history[-1]['next_waypoint_lon']]))
+        # # Calculate distance from current position to next waypoint
+        # distance = np.linalg.norm(np.array([self.state['lat'], self.state['lon']]) - np.array([self.state['next_waypoint_lat'], self.state['next_waypoint_lon']]))
+        # old_distance = np.linalg.norm(np.array([self.state_history[-1]['lat'], self.state_history[-1]['lon']]) - np.array([self.state_history[-1]['next_waypoint_lat'], self.state_history[-1]['next_waypoint_lon']]))
 
-        # Give some reward based on if the agent is getting closer or further away from the next waypoint
-        if (distance < old_distance):
-            reward += 1
-        else:
-            reward -= 1
+        # # Give some reward based on if the agent is getting closer or further away from the next waypoint
+        # if (distance < old_distance):
+        #     # Scale the reward based on how much closer the agent got to the next waypoint
+        #     reward += 1 - distance / old_distance
+        # else:
+        #     reward -= 1 - old_distance / distance
         
         # Copy the state to the state history
         self.state_history.append(self.state.copy())
@@ -218,9 +220,10 @@ class BoundaryEnv(gym.Env):
         done = False
         if self.steps_left == 0:
             done = True
+            reward = -10
         elif self.state['current_waypoint_index'] == len(self.state['waypoints']) - 2:
             done = True
-            reward = 1000
+            reward = 100
 
         # Return
         return self.observation(), reward, done, {}
@@ -316,7 +319,7 @@ if __name__ == "__main__":
     # Remove duplicate points
     data = removeDuplicatePoints(data)
 
-    data = data[100:120]
+    data = data[100:200]
 
     # Scale the lat/lon and ele coordinates to be in the range [0, 1]
     data = scaleData(data)
@@ -338,7 +341,10 @@ if __name__ == "__main__":
     # model = DQN('MlpPolicy', env, verbose=1)
 
     # Train the model
-    model.learn(total_timesteps=100000)
+    model.learn(total_timesteps=10000000)
+
+    # Save the model
+    model.save("../models/boundary_model")
 
     # Render
     env.render()

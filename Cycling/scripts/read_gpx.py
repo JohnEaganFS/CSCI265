@@ -24,7 +24,7 @@ def boundaries(a, b):
     # Return the four points
     return [point1, point2, point3, point4]
 
-def read_gpx(filename):
+def read_gpx(filename, trksegElementIndex=2):
     tree = ET.parse(filename)
     root = tree.getroot()
 
@@ -32,7 +32,8 @@ def read_gpx(filename):
     points = []
 
     trkElement = root[1]
-    trksegElement = trkElement[2]
+    # Get the trkseg element (named trkseg)
+    trksegElement = trkElement[trksegElementIndex]
     for trkpt in trksegElement:
         lat = float(trkpt.attrib['lat'])
         lon = float(trkpt.attrib['lon'])
@@ -119,7 +120,9 @@ if __name__ == "__main__":
 
     print(data)
 
-    # drawPoints(data)
+    data = data[500:1500]
+
+    drawPoints(data)
 
     # for point in data:
     #     print(point.lat, point.lon, point.ele)
