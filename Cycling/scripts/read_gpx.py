@@ -118,7 +118,7 @@ if __name__ == "__main__":
     data = scaleData(data)
 
 
-    # drawPoints(data[:100])
+    drawPoints(data)
 
     # for point in data:
     #     print(point.lat, point.lon, point.ele)
