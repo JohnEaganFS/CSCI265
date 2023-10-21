@@ -18,7 +18,7 @@ from stable_baselines3.common.env_util import make_vec_env
 
 
 # Parameters
-max_steps = 500
+max_steps = 1000
 # waypoints = np.array([[0, 0], [0.5, 0.5], [1, 1], [1.5, 1.5]])
 # waypoints = np.array([[0, 0], [0.5, 0.75], [1, 1], [1.5, 1.5]])
 waypoints = np.array([[0,0], [0, 0.25], [0, 0.5], [0.5, 0.75], [1, 1], [1.5, 1.5]])
@@ -154,17 +154,9 @@ class BoundaryEnv(gym.Env):
 
         reward = 0
 
-        # Check if the agent is within the current boundary
-        # If it is, proceed as normal
-        if (checkIfInRectangle(np.array([self.state['lat'], self.state['lon']]), self.state['boundary_points'][self.state['current_waypoint_index']])):
-            self.state['lat'] += self.state['speed'] * dx
-            self.state['lon'] += self.state['speed'] * dy
-            self.state['heading_lat'] += self.state['speed'] * dx
-            self.state['heading_lon'] += self.state['speed'] * dy
-            reward = 0
-        # If it isn't, check if it is within the next boundary
+        # Check if it is within the next boundary
         # If it is, update the current and next waypoint indices
-        elif (checkIfInRectangle(np.array([self.state['lat'], self.state['lon']]), self.state['boundary_points'][self.state['next_waypoint_index']])):
+        if (checkIfInRectangle(np.array([self.state['lat'], self.state['lon']]), self.state['boundary_points'][self.state['next_waypoint_index']])):
             self.state['current_waypoint_index'] += 1
             self.state['next_waypoint_index'] += 1
             self.state['lat'] += self.state['speed'] * dx
@@ -176,7 +168,15 @@ class BoundaryEnv(gym.Env):
             reward = 20
             # Log these positive rewards
             self.log += f'Positive Reward: {self.state}\n'
-        # If it isn't, then the agent is outside the boundaries
+        # Check if the agent is within the current boundary
+        # If it is, proceed as normal
+        elif (checkIfInRectangle(np.array([self.state['lat'], self.state['lon']]), self.state['boundary_points'][self.state['current_waypoint_index']])):
+            self.state['lat'] += self.state['speed'] * dx
+            self.state['lon'] += self.state['speed'] * dy
+            self.state['heading_lat'] += self.state['speed'] * dx
+            self.state['heading_lon'] += self.state['speed'] * dy
+            reward = 0
+        # If it isn't in either, then the agent is outside the boundaries
         else:
             # Move the agent back to the previous waypoint
             # self.state['lat'] = waypoints[self.state['current_waypoint_index']][0]
@@ -197,6 +197,16 @@ class BoundaryEnv(gym.Env):
 
         # Apply living penalty
         # reward -= 0.1
+
+        # Calculate distance from current position to next waypoint
+        distance = np.linalg.norm(np.array([self.state['lat'], self.state['lon']]) - np.array([self.state['next_waypoint_lat'], self.state['next_waypoint_lon']]))
+        old_distance = np.linalg.norm(np.array([self.state_history[-1]['lat'], self.state_history[-1]['lon']]) - np.array([self.state_history[-1]['next_waypoint_lat'], self.state_history[-1]['next_waypoint_lon']]))
+
+        # Give some reward based on if the agent is getting closer or further away from the next waypoint
+        if (distance < old_distance):
+            reward += 1
+        else:
+            reward -= 1
         
         # Copy the state to the state history
         self.state_history.append(self.state.copy())
@@ -347,8 +357,8 @@ if __name__ == "__main__":
             action, _states = model.predict(obs, deterministic=True)
             obs, rewards, done, info = env.step(action)
             if done:
-                # print("Episode finished after {} timesteps".format(i+1))
-                # print("Final State:", env.state)
+                print("Episode finished after {} timesteps".format(i+1))
+                print("Final State:", env.state)
                 path_trajectories.append(env.state_history)
                 break
         # env.render(mode='path')
@@ -360,19 +370,22 @@ if __name__ == "__main__":
         plt.scatter(path[:,0], path[:,1], c=colors, cmap='cool', s=0.1)
     # Plot the waypoints
     plt.plot(waypoints[:,0], waypoints[:,1], 'ro', markersize=2)
+    # Label the waypoints
+    for i, waypoint in enumerate(waypoints):
+        plt.text(waypoint[0], waypoint[1], str(i+1))
     # Plot the boundary points and lines
     for i, bp in enumerate(boundary_points):
         # Points
         plt.plot(bp[:,0], bp[:,1], 'bo', markersize=0.5)
         # Lines
         # 1 and 2
-        # plt.plot([bp[0][0], bp[1][0]], [bp[0][1], bp[1][1]], c='black')
+        plt.plot([bp[0][0], bp[1][0]], [bp[0][1], bp[1][1]], c='black')
         # 2 and 4
-        #plt.plot([bp[1][0], bp[3][0]], [bp[1][1], bp[3][1]], c='black')
+        plt.plot([bp[1][0], bp[3][0]], [bp[1][1], bp[3][1]], c='black')
         # 4 and 3
-        #plt.plot([bp[3][0], bp[2][0]], [bp[3][1], bp[2][1]], c='black')
+        plt.plot([bp[3][0], bp[2][0]], [bp[3][1], bp[2][1]], c='black')
         # 3 and 1
-        #plt.plot([bp[2][0], bp[0][0]], [bp[2][1], bp[0][1]], c='black') 
+        plt.plot([bp[2][0], bp[0][0]], [bp[2][1], bp[0][1]], c='black') 
     plt.grid()  
     plt.xlim(-0.5, 1.5)
     plt.ylim(-0.5, 1.5)
