@@ -16,6 +16,7 @@ from gym.spaces.utils import unflatten
 # Parameters
 max_steps = 1000
 # waypoints = np.array([[0, 0], [0.5, 0.5], [1, 1], [1.5, 1.5]])
+# waypoints = np.array([[0, 0], [0.5, 0.75], [1, 1], [1.5, 1.5]])
 waypoints = np.array([[0,0], [0, 0.25], [0, 0.5], [1, 1], [1.5, 1.5]])
 
 # Observations
@@ -73,37 +74,6 @@ def defineObservationSpace():
     high = np.array([upper_bounds[key] for key in observations])
     shape = low.shape
     return gym.spaces.Box(low, high, shape, dtype=np.float32)
-
-    # low = np.array([lower_bounds[key] for key in observations if key != 'boundary_points'])
-    # high = np.array([upper_bounds[key] for key in observations if key != 'boundary_points'])
-    # shape = low.shape
-
-    # boxes = [gym.spaces.Box(low, high, shape, dtype=np.float32) for low, high, shape in zip([lower_bounds[key] for key in observations if key != 'boundary_points'], [upper_bounds[key] for key in observations if key != 'boundary_points'], [np.array([1, 1]), np.array([1, 1]), np.array([1]), np.array([1, 1]), np.array([1, 1])])]
-
-    # # Add the boundary points to the observation space
-    # bp_box = gym.spaces.Box(low=0, high=1, shape=(4, 2), dtype=np.float32)
-
-    # spaces = {
-    #     'lat': boxes[0],
-    #     'lon': boxes[1],
-    #     'speed': boxes[2],
-    #     'heading_lat': boxes[3],
-    #     'heading_lon': boxes[4],
-    #     'boundary_points': bp_box
-    # }
-
-    # shapes = {
-    #     'lat': boxes[0].shape,
-    #     'lon': boxes[1].shape,
-    #     'speed': boxes[2].shape,
-    #     'heading_lat': boxes[3].shape,
-    #     'heading_lon': boxes[4].shape,
-    #     'boundary_points': bp_box.shape
-    # }
-
-    # #return gym.spaces.Dict(spaces)
-
-    #return gym.spaces.Box(low=-np.inf, high=np.inf, shape=(sum([np.prod(shape) for shape in shapes.values()]),), dtype=np.float32)
     
 # Actions
 def getNewHeading(state, action):
@@ -180,7 +150,7 @@ def checkIfInRectangle(point, boundary_points):
     ''' Check if a point is in a rectangle defined by the boundary points.
     '''
     # Get the boundary points
-    a, b, c, d = boundary_points[0], boundary_points[1], boundary_points[2], boundary_points[3]
+    a, b, d, c = boundary_points[0], boundary_points[1], boundary_points[2], boundary_points[3]
     # Check if point is in rectangle
     vector_ap = point - a
     vector_ab = b - a
@@ -216,7 +186,7 @@ class BoundaryEnv(gym.Env):
             self.state['lon'] += self.state['speed'] * dy
             self.state['heading_lat'] += self.state['speed'] * dx
             self.state['heading_lon'] += self.state['speed'] * dy
-            reward = -1
+            reward = 0
         # If it isn't, check if it is within the next boundary
         # If it is, update the current and next waypoint indices
         elif (checkIfInRectangle(np.array([self.state['lat'], self.state['lon']]), self.state['boundary_points'][self.state['next_waypoint_index']])):
@@ -245,20 +215,25 @@ class BoundaryEnv(gym.Env):
                 self.state['next_bp_4_lat'] = self.state['boundary_points'][self.state['next_waypoint_index']][3][0]
                 self.state['next_bp_4_lon'] = self.state['boundary_points'][self.state['next_waypoint_index']][3][1]
             except:
-                print(self.state['boundary_points'][4])
+                pass
             reward = 10
             # Log these positive rewards
             self.log += f'Positive Reward: {self.state}\n'
         # If it isn't, then the agent is outside the boundaries
         else:
             # Move the agent back to the previous waypoint
-            self.state['lat'] = waypoints[self.state['current_waypoint_index']][0]
-            self.state['lon'] = waypoints[self.state['current_waypoint_index']][1]
-            # Reset the heading vector
-            self.state['heading_lat'] = self.state['lat'] + 0.1
-            self.state['heading_lon'] = self.state['lon']
+            # self.state['lat'] = waypoints[self.state['current_waypoint_index']][0]
+            # self.state['lon'] = waypoints[self.state['current_waypoint_index']][1]
+            # # Reset the heading vector to the next waypoint
+            # self.state['heading_lat'] = waypoints[self.state['next_waypoint_index']][0]
+            # self.state['heading_lon'] = waypoints[self.state['next_waypoint_index']][1]
+            self.state['lat'] += self.state['speed'] * dx
+            self.state['lon'] += self.state['speed'] * dy
+            self.state['heading_lat'] += self.state['speed'] * dx
+            self.state['heading_lon'] += self.state['speed'] * dy
+
             # Reset penalty
-            reward = -2
+            reward = -1
 
         # Update the speed
         updateSpeed(self.state)
@@ -266,12 +241,13 @@ class BoundaryEnv(gym.Env):
         # Adjust reward based on distance to goal
         goal = np.array([1.0, 1.0])
         position = np.array([self.state['lat'], self.state['lon']])
-        distance = np.linalg.norm(goal - position)
+        distance = np.linalg.norm(abs(goal - position))
         isBetter = distance < self.state['best_distance']
         # if isBetter:
         #     self.state['best_distance'] = distance
+        #     reward += 0.1
         # else:
-        #     reward -= 0.1
+        #     reward -= 1
 
         # Copy the state to the state history
         self.state_history.append(self.state.copy())
@@ -294,9 +270,10 @@ class BoundaryEnv(gym.Env):
         self.state = {
             'lat': 0,
             'lon': 0,
-            'speed': 0.1,
-            'heading_lat': 0.1,
-            'heading_lon': 0.1,
+            'speed': 0.05,
+            # initialize heading vector to point at next waypoint
+            'heading_lat': waypoints[1][0],
+            'heading_lon': waypoints[1][1],
             'boundary_point_1_lat': boundary_points[0][0][0],
             'boundary_point_1_lon': boundary_points[0][0][1],
             'boundary_point_2_lat': boundary_points[0][1][0],
@@ -388,8 +365,8 @@ if __name__ == "__main__":
     # env.render(mode='path')
 
     # Model
-    # model = PPO('MlpPolicy', env, verbose=1)
-    model = DQN('MlpPolicy', env, verbose=1)
+    model = PPO('MlpPolicy', env, verbose=1)
+    # model = DQN('MlpPolicy', env, verbose=1)
 
     # Train the model
     model.learn(total_timesteps=100000)
