@@ -14,7 +14,7 @@ from read_gpx import read_gpx, removeDuplicatePoints, scaleData
 
 
 # Parameters
-max_steps = 500
+max_steps = 1000
 # waypoints = np.array([[0, 0], [0.5, 0.5], [1, 1], [1.5, 1.5]])
 # waypoints = np.array([[0, 0], [0.5, 0.75], [1, 1], [1.5, 1.5]])
 waypoints = np.array([[0,0], [0, 0.25], [0, 0.5], [0.5, 0.75], [1, 1], [1.5, 1.5]])
@@ -193,6 +193,16 @@ class BoundaryEnv(gym.Env):
 
         # Apply living penalty
         # reward -= 0.1
+
+        # Calculate distance from current position to next waypoint
+        distance = np.linalg.norm(np.array([self.state['lat'], self.state['lon']]) - np.array([self.state['next_waypoint_lat'], self.state['next_waypoint_lon']]))
+        old_distance = np.linalg.norm(np.array([self.state_history[-1]['lat'], self.state_history[-1]['lon']]) - np.array([self.state_history[-1]['next_waypoint_lat'], self.state_history[-1]['next_waypoint_lon']]))
+
+        # Give some reward based on if the agent is getting closer or further away from the next waypoint
+        if (distance < old_distance):
+            reward += 1
+        else:
+            reward -= 1
         
         # Copy the state to the state history
         self.state_history.append(self.state.copy())
@@ -312,7 +322,7 @@ if __name__ == "__main__":
     # model = DQN('MlpPolicy', env, verbose=1)
 
     # Train the model
-    model.learn(total_timesteps=200000)
+    model.learn(total_timesteps=300000)
 
     # Render
     env.render()
