@@ -89,7 +89,7 @@ def inPoly(point, path_points):
 
 ### Global Variables ###
 max_steps = 2000
-total_timesteps = 1000000
+total_timesteps = 300000
 n = 1
 
  # Create pymunk space
@@ -257,12 +257,15 @@ class CustomRacing2DEnv(gym.Env):
             'walls': walls,
             'reward': 0,
             'cumulative_reward': 0,
+            'reward_mean': 1,
+            'reward_std': 1
         }
         self.speed_limit = 200
         self.steps_since_last_waypoint = 0
         self.steps_left = self.max_steps
         self.log = ''
         self.state_history = [self.state]
+        self.reward_history = []
 
         return self.observation()
 
@@ -325,23 +328,27 @@ class CustomRacing2DEnv(gym.Env):
         elif inPoly(car.position, [a1, b1, c1, d1]):
             reward += 0
             self.steps_since_last_waypoint += 1
-        # Else if in neither waypoint,
+        # Else if in neither waypoint, either the car is off the track or it is going backwards
         else:
-            # Reset car to current waypoint
-            (x, y) = self.state['waypoints'][self.state['current_waypoint']]
-            v = self.state['waypoints'][self.state['next_waypoint']] - self.state['waypoints'][self.state['current_waypoint']]
-            # Start the car a little bit away from the current waypoint if it is the first waypoint
-            if self.state['current_waypoint'] == 0:
-                x += v[0] * 0.1
-                y += v[1] * 0.1
-            car.position = (x, y)
-            # Reset car velocity
-            self.state['speed'] = 0
-            car.velocity = pymunk.Vec2d(0, 0)
-            # Reset heading
-            self.state['heading'] = -np.arctan2(v[1], v[0])
-            reward -= 5
-            self.steps_since_last_waypoint = 0
+            # Penalize for not making progress and scale penalty by the number of steps since the last waypoint
+            reward -= 0.0001 * self.steps_since_last_waypoint
+            # # If steps since last waypoint is greater than 100, i.e. allow the car to go backwards for 100 steps
+            # if self.steps_since_last_waypoint >= 100:
+            #     # Reset car to current waypoint
+            #     (x, y) = self.state['waypoints'][self.state['current_waypoint']]
+            #     v = self.state['waypoints'][self.state['next_waypoint']] - self.state['waypoints'][self.state['current_waypoint']]
+            #     # Start the car a little bit away from the current waypoint if it is the first waypoint
+            #     if self.state['current_waypoint'] == 0:
+            #         x += v[0] * 0.1
+            #         y += v[1] * 0.1
+            #     car.position = (x, y)
+            #     # Reset car velocity
+            #     self.state['speed'] = 0
+            #     car.velocity = pymunk.Vec2d(0, 0)
+            #     # Reset heading
+            #     self.state['heading'] = -np.arctan2(v[1], v[0])
+            #     reward -= 1
+            #     self.steps_since_last_waypoint = 0
 
         # Update state
         if (self.state['next_waypoint'] < len(self.state['waypoints']) - 1):
@@ -365,7 +372,7 @@ class CustomRacing2DEnv(gym.Env):
 
         self.state['reward'] = reward
         self.state['cumulative_reward'] += reward
-
+        
         # State History
         self.state_history.append(self.state.copy())
 
@@ -391,6 +398,7 @@ class CustomRacing2DEnv(gym.Env):
         draw_sensors(screen, self.state)
         draw_speed(screen, self.state['cars'][0][0].velocity.length, self.speed_limit)
         draw_reward(screen, self.state_history[-1]['reward'], self.state_history[-1]['cumulative_reward'])
+        draw_boundaries(screen, self.boundaries, self.state)
         # screen.blit(pygame.transform.flip(screen, False, True), (0, 0))
         pygame.display.update()
         clock.tick(FPS)
@@ -490,6 +498,24 @@ def draw_speed(screen, velocity, speed_limit):
     # Create speed bar
     pygame.draw.rect(screen, (255, 255, 255), (500, 250, speed_limit, 10))
     pygame.draw.rect(screen, (0, 255, 0), (500, 250, velocity, 10))
+
+def draw_boundaries(screen, boundaries, state):
+    # Get points a, b, c, d
+    a, b = boundaries[state['current_waypoint']]
+    c, d = boundaries[state['current_waypoint'] + 1]
+    a1, b1 = boundaries[state['next_waypoint']]
+    c1, d1 = boundaries[state['next_waypoint'] + 1]
+
+    # Draw lines between points a-b, b-d, d-c, c-a
+    pygame.draw.line(screen, (255, 255, 255), a, b, 1)
+    pygame.draw.line(screen, (255, 255, 255), b, d, 1)
+    pygame.draw.line(screen, (255, 255, 255), d, c, 1)
+    pygame.draw.line(screen, (255, 255, 255), c, a, 1)
+
+    pygame.draw.line(screen, (255, 255, 255), a1, b1, 1)
+    pygame.draw.line(screen, (255, 255, 255), b1, d1, 1)
+    pygame.draw.line(screen, (255, 255, 255), d1, c1, 1)
+    pygame.draw.line(screen, (255, 255, 255), c1, a1, 1)
 
 def game():
     # Collision handler
@@ -596,8 +622,8 @@ def trainParallel():
 
 if __name__ == "__main__":
     # Create environment
-    # env = CustomRacing2DEnv()
-    env = trainParallel()
+    env = CustomRacing2DEnv()
+    # env = trainParallel()
     # env = DummyVecEnv([lambda: CustomRacing2DEnv()])
     # env = VecNormalize(env)
 
