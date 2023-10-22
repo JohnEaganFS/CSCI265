@@ -8,6 +8,7 @@ create the "walls" of the track and the "car" that will be racing around the tra
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.path as mplPath
+from typing import Callable
 
 # Gym
 import gym
@@ -15,6 +16,8 @@ import gym
 # SB3
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.utils import set_random_seed
+from stable_baselines3.common.env_util import make_vec_env
 
 # Simulation (pygame, pymunk)
 import pygame
@@ -85,7 +88,7 @@ def inPoly(point, path_points):
 
 ### Global Variables ###
 max_steps = 2000
-total_timesteps = 300000
+total_timesteps = 1000000
 n = 1
 
  # Create pymunk space
@@ -99,7 +102,7 @@ FPS = 120
 
 # Pull waypoints from .gpx file
 points = removeDuplicatePoints(read_gpx('../gpx/windy_road.gpx', 1))
-points = points[10:30]
+points = points[100:200]
 points = scaleData(points)
 points = points * 900 + 50
 points = points[:, :2]
@@ -180,6 +183,28 @@ def getNewHeading(heading_angle, steering_angle):
         new_angle += 2 * np.pi
     return new_angle
 
+def getNewSpeed(speed, throttle, brake, speed_limit):
+    '''
+    Throttle controls acceleration
+    Brake controls deceleration
+    '''
+    # Get force from throttle and brake
+    force = throttle - brake
+
+    # Add some noise to the force
+    force += np.random.normal(0, 0.05)
+
+    # Update speed
+    new_speed = speed + force
+
+    # Keep speed between -speed_limit and speed_limit
+    if (new_speed > speed_limit):
+        new_speed = speed_limit
+    elif (new_speed < -speed_limit):
+        new_speed = -speed_limit
+
+    return new_speed
+
 def sensorReading(sensor, car, space, sensor_range, heading):
      # Get sensor readings
     s_range = sensor_range
@@ -228,8 +253,12 @@ class CustomRacing2DEnv(gym.Env):
             'waypoints': waypoints,
             'space': space,
             'cars': cars,
-            'walls': walls
+            'walls': walls,
+            'reward': 0,
+            'cumulative_reward': 0,
         }
+        self.speed_limit = 100
+        self.steps_since_last_waypoint = 0
         self.steps_left = self.max_steps
         self.log = ''
         self.state_history = [self.state]
@@ -256,14 +285,13 @@ class CustomRacing2DEnv(gym.Env):
         new_heading = getNewHeading(self.state['heading'], steer)
         self.state['heading'] = new_heading
         # Get new speed
-        new_speed = self.state['speed'] + throttle - brake 
+        new_speed = getNewSpeed(self.state['speed'], throttle, brake, self.speed_limit)
         self.state['speed'] = new_speed
 
-        # Simulate physics with pymunk space
-        # Apply force to car
-        force = pymunk.Vec2d(new_speed * np.cos(new_heading), new_speed * np.sin(new_heading))
         car = self.state['cars'][0][0]
-        car.velocity = force
+        # Update car velocity
+        car.velocity = pymunk.Vec2d(new_speed * np.cos(new_heading), new_speed * np.sin(new_heading))
+
         # Update physics
         if render:
             self.render()
@@ -291,30 +319,55 @@ class CustomRacing2DEnv(gym.Env):
             self.state['current_waypoint'] += 1
             self.state['next_waypoint'] += 1
             reward += 1000 / len(self.state['waypoints'])
+            self.steps_since_last_waypoint = 0
         # Else if in the current waypoint, do nothing
         elif inPoly(car.position, [a1, b1, c1, d1]):
             reward += 0
+            self.steps_since_last_waypoint += 1
         # Else if in neither waypoint,
         else:
-            reward -= 0.01
+            # Reset car to current waypoint
+            (x, y) = self.state['waypoints'][self.state['current_waypoint']]
+            v = self.state['waypoints'][self.state['next_waypoint']] - self.state['waypoints'][self.state['current_waypoint']]
+            # Start the car a little bit away from the current waypoint if it is the first waypoint
+            if self.state['current_waypoint'] == 0:
+                x += v[0] * 0.1
+                y += v[1] * 0.1
+            car.position = (x, y)
+            # Reset car velocity
+            self.state['speed'] = 0
+            car.velocity = pymunk.Vec2d(0, 0)
+            # Reset heading
+            self.state['heading'] = -np.arctan2(v[1], v[0])
+            reward -= 10
+            self.steps_since_last_waypoint = 0
 
         # Update state
         if (self.state['next_waypoint'] < len(self.state['waypoints']) - 1):
             v = self.state['vector_x'], self.state['vector_y'] = self.state['waypoints'][self.state['next_waypoint']] - car.position
-        
-        # State History
-        self.state_history.append(self.state.copy())
 
         # Update steps left
         self.steps_left -= 1
 
         # Check if done
-        done = False
-        if self.steps_left == 0:
-            done = True
-        elif self.state['next_waypoint'] == len(self.state['waypoints']) - 1:
-            done = True
-        
+        done = any([
+            # If the car has not reached the next waypoint in 100 steps, end the episode
+            self.steps_since_last_waypoint >= 500,
+            # If the car has reached the last waypoint, end the episode
+            self.state['next_waypoint'] == len(self.state['waypoints']) - 1,
+            # If the car has run out of steps, end the episode
+            self.steps_left == 0
+        ])
+
+        if (done and self.steps_since_last_waypoint >= 500):
+            reward -= 1
+
+        self.state['reward'] = reward
+        self.state['cumulative_reward'] += reward
+
+        # State History
+        self.state_history.append(self.state.copy())
+
         # Return observation, reward, done, info
         return self.observation(), reward, done, {}
 
@@ -335,9 +388,15 @@ class CustomRacing2DEnv(gym.Env):
         draw_waypoints(screen, self.state['waypoints'], self.state['current_waypoint'], self.state['next_waypoint'])
         draw_timestep(screen, self.state_history)
         draw_sensors(screen, self.state)
+        draw_speed(screen, self.state['cars'][0][0].velocity.length, self.speed_limit)
+        draw_reward(screen, self.state_history[-1]['reward'], self.state_history[-1]['cumulative_reward'])
         # screen.blit(pygame.transform.flip(screen, False, True), (0, 0))
         pygame.display.update()
         clock.tick(FPS)
+
+    def seed(self, seed=None):
+        self.np_random, seed = gym.utils.seeding.np_random(seed)
+        return [seed]
 
     def close(self):
         pass
@@ -346,14 +405,14 @@ class CustomRacing2DEnv(gym.Env):
 def create_wall(space, x1, y1, x2, y2):
     body = pymunk.Body(body_type=pymunk.Body.STATIC)
     body.position = (0, 0)
-    segment = pymunk.Segment(body, (x1, y1), (x2, y2), 2)
-    segment.elasticity = 1
+    segment = pymunk.Segment(body, (x1, y1), (x2, y2), 3)
+    segment.elasticity = 0.8
     space.add(body, segment)
     return segment
 
 def draw_walls(screen, walls):
     for wall in walls:
-        pygame.draw.line(screen, (255, 255, 255), wall.a, wall.b, 2)
+        pygame.draw.line(screen, (255, 255, 255), wall.a, wall.b, 3)
 
 def create_car(space, x, y):
     body = pymunk.Body(10, 1, body_type=pymunk.Body.DYNAMIC)
@@ -406,6 +465,31 @@ def draw_sensors(screen, state):
     sensor_right = car.position + pymunk.Vec2d(state['sensor_range'] * np.cos(state['heading'] - np.pi / 2), state['sensor_range'] * np.sin(state['heading'] - np.pi / 2))
     pygame.draw.line(screen, (255, 255, 255), car.position, sensor_right, 1)
 
+def draw_reward(screen, reward, cumulative_reward):
+    # Write reward to screen
+    font = pygame.font.Font('freesansbold.ttf', 32)
+    text = font.render(f'Reward: {reward:.2f}', True, (255, 255, 255))
+    textRect = text.get_rect()
+    textRect.center = (500, 100)
+    screen.blit(text, textRect)
+    # Write cumulative reward to screen
+    font = pygame.font.Font('freesansbold.ttf', 32)
+    text = font.render(f'Cumulative Reward: {cumulative_reward:.2f}', True, (255, 255, 255))
+    textRect = text.get_rect()
+    textRect.center = (500, 150)
+    screen.blit(text, textRect)
+
+def draw_speed(screen, velocity, speed_limit):
+    # Write velocity to screen
+    font = pygame.font.Font('freesansbold.ttf', 32)
+    text = font.render(f'Speed: {velocity:.2f}', True, (255, 255, 255))
+    textRect = text.get_rect()
+    textRect.center = (500, 200)
+    screen.blit(text, textRect)
+    # Create speed bar
+    pygame.draw.rect(screen, (255, 255, 255), (500, 250, speed_limit, 10))
+    pygame.draw.rect(screen, (0, 255, 0), (500, 250, velocity, 10))
+
 def game():
     # Collision handler
     def car_collide(arbiter, space, data):
@@ -438,7 +522,9 @@ def game():
 def createGame(space, boundaries, points):
     # Create car
     cars = []
-    cars.append(create_car(space, points[0][0], points[0][1]))
+    v = points[1] - points[0]
+    # Start the car a little bit away from the first waypoint
+    cars.append(create_car(space, points[0][0] + v[0] * 0.1, points[0][1] + v[1] * 0.1))
     # Add ShapeFilter to car
     cars[0][1].filter = pymunk.ShapeFilter(categories=0b1, mask=pymunk.ShapeFilter.ALL_MASKS() ^ 0b1)
 
@@ -453,16 +539,22 @@ def createGame(space, boundaries, points):
         walls.append(create_wall(space, p1[0], p1[1], p2[0], p2[1]))
         walls.append(create_wall(space, p3[0], p3[1], p4[0], p4[1]))
         # Create segment between p1 and p3
-        # walls.append(create_wall(space, p1[0], p1[1], p3[0], p3[1]))
+        if i == 0:
+            walls.append(create_wall(space, p1[0], p1[1], p3[0], p3[1]))
 
     # Collision handler
     def car_collide(arbiter, space, data):
         # Bounce off walls
         return True
     
+    def car_collide_end(arbiter, space, data):
+        # Bounce off walls
+        return True
+    
     # Add collision handler
     handler = space.add_collision_handler(0, 0)
     handler.begin = car_collide
+    handler.separate = car_collide_end
 
     return space, cars, walls
 
@@ -487,17 +579,24 @@ def playNEpisodes(n, env, model):
                     pygame.display.update()
                 break
 
+### Parallel Environments ###
+def make_env(env_id: str, rank: int, seed: int = 0) -> Callable:
+    def _init() -> gym.Env:
+        env = CustomRacing2DEnv()
+        env.seed(seed + rank)
+        return env
+    set_random_seed(seed)
+    return _init
+
+def trainParallel():
+    n_cpu = 10
+    env = make_vec_env(CustomRacing2DEnv, n_envs=n_cpu, seed=0)
+    return env
+
 if __name__ == "__main__":
-
-    # Create car
-    # cars = []
-    # cars.append(create_car(space, points[0][0], points[0][1]))
-
-    # # Run game
-    # game()
-
     # Create environment
-    env = CustomRacing2DEnv()
+    # env = CustomRacing2DEnv()
+    env = trainParallel()
 
     # Create model
     model = PPO('MlpPolicy', env, verbose=1)
@@ -513,4 +612,5 @@ if __name__ == "__main__":
     print(f'Mean reward: {mean_reward} +/- {std_reward}')
 
     # Render n episodes
+    env = CustomRacing2DEnv()
     playNEpisodes(n, env, model)

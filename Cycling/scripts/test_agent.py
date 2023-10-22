@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # Load points
     # Pull waypoints from .gpx file
     points = removeDuplicatePoints(read_gpx('../gpx/windy_road.gpx', 1))
-    points = points[10:30]
+    points = points[100:200]
     points = scaleData(points)
     points = points * 900 + 50
     points = points[:, :2]
@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     # Load agent model
     # model = PPO.load("ppo_custom_racing_2d")
-    model = PPO.load("../models/ppo_custom_racing_2d")
+    model = PPO.load("../models/temp_model")
 
     # # Train the agent on the new environment
     # model.set_env(env)
