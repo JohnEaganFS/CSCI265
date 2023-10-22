@@ -156,12 +156,12 @@ actions = ['steer', 'throttle', 'brake']
 
 def defineActionSpace():
     lows = {
-        'steer': -np.pi / 8,
+        'steer': -np.pi / 16,
         'throttle': 0,
         'brake': 0
     }
     highs = {
-        'steer': np.pi / 8,
+        'steer': np.pi / 16,
         'throttle': 1,
         'brake': 1
     }
@@ -266,13 +266,14 @@ class CustomRacing2DEnv(gym.Env):
         self.log = ''
         self.state_history = [self.state]
         self.reward_history = []
+        self.car_color = np.random.randint(0, 255, 3)
 
         return self.observation()
 
     def observation(self):
         return np.array([self.state[obs] for obs in self.observations])
 
-    def step(self, action, render=False):
+    def step(self, action, render=True, training=True):
         ### Ideas
         # if doesn't move to next waypoint in <=100 steps, end episode
         # maybe a reset action to reset the car to the current waypoint (have to watch out for cheating)
@@ -298,7 +299,7 @@ class CustomRacing2DEnv(gym.Env):
 
         # Update physics
         if render:
-            self.render()
+            self.render(training)
         else:
             self.state['space'].step(1 / FPS)
 
@@ -379,7 +380,7 @@ class CustomRacing2DEnv(gym.Env):
         # Return observation, reward, done, info
         return self.observation(), reward, done, {}
 
-    def render(self):
+    def render(self, training=True):
         # Handle events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -390,18 +391,27 @@ class CustomRacing2DEnv(gym.Env):
         self.state['space'].step(1 / FPS)
 
         # Draw stuff
-        screen.fill((0, 0, 0))
-        draw_walls(screen, self.state['walls'])
-        draw_cars(screen, self.state['cars'])
-        draw_waypoints(screen, self.state['waypoints'], self.state['current_waypoint'], self.state['next_waypoint'])
-        draw_timestep(screen, self.state_history)
-        draw_sensors(screen, self.state)
-        draw_speed(screen, self.state['cars'][0][0].velocity.length, self.speed_limit)
-        draw_reward(screen, self.state_history[-1]['reward'], self.state_history[-1]['cumulative_reward'])
+        # Only reset part of the screen that contains the car
+        car_position = self.state['cars'][0][0].position
+        # Fill pixel of car with black
+        # screen.fill((0, 0, 0), (car_position[0] - 2, car_position[1] - 2, 4, 4))
+        if not(training):
+            screen.fill((0, 0, 0))
+            draw_walls(screen, self.state['walls'])
+            draw_waypoints(screen, self.state['waypoints'], self.state['current_waypoint'], self.state['next_waypoint'])
+            draw_timestep(screen, self.state_history)
+            draw_sensors(screen, self.state)
+            draw_speed(screen, self.state['cars'][0][0].velocity.length, self.speed_limit)
+        # draw_reward(screen, self.state_history[-1]['reward'], self.state_history[-1]['cumulative_reward'])
+        draw_cars(screen, self.state['cars'], self.car_color)
         draw_boundaries(screen, self.boundaries, self.state)
-        # screen.blit(pygame.transform.flip(screen, False, True), (0, 0))
-        pygame.display.update()
-        clock.tick(FPS)
+        # Update display (only update part of the screen that contains the car if training)
+        if training:
+            pygame.display.update((car_position[0] - 20, car_position[1] - 20, 40, 40))
+            clock.tick(np.inf)
+        else:
+            pygame.display.update()
+            clock.tick(FPS)
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
@@ -433,10 +443,10 @@ def create_car(space, x, y):
     space.add(body, shape)
     return body, shape
 
-def draw_cars(screen, cars):
+def draw_cars(screen, cars, color):
     for car in cars:
         pos = car[0].position
-        pygame.draw.circle(screen, (255, 0, 0), (int(pos[0]), int(pos[1])), 2)
+        pygame.draw.circle(screen, color, (int(pos[0]), int(pos[1])), 1)
 
 def draw_waypoints(screen, waypoints, current_waypoint, next_waypoint):
     for i, waypoint in enumerate(waypoints):
@@ -493,11 +503,11 @@ def draw_speed(screen, velocity, speed_limit):
     font = pygame.font.Font('freesansbold.ttf', 32)
     text = font.render(f'Speed: {velocity:.2f}', True, (255, 255, 255))
     textRect = text.get_rect()
-    textRect.center = (500, 200)
+    textRect.center = (500, 100)
     screen.blit(text, textRect)
     # Create speed bar
-    pygame.draw.rect(screen, (255, 255, 255), (500, 250, speed_limit, 10))
-    pygame.draw.rect(screen, (0, 255, 0), (500, 250, velocity, 10))
+    pygame.draw.rect(screen, (255, 255, 255), (400, 150, speed_limit, 10))
+    pygame.draw.rect(screen, (0, 255, 0), (400, 150, velocity, 10))
 
 def draw_boundaries(screen, boundaries, state):
     # Get points a, b, c, d
@@ -568,6 +578,8 @@ def createGame(space, boundaries, points):
         # Create segment between p1 and p3
         if i == 0:
             walls.append(create_wall(space, p1[0], p1[1], p3[0], p3[1]))
+        if i == len(boundaries) - 2:
+            walls.append(create_wall(space, p2[0], p2[1], p4[0], p4[1]))
 
     # Collision handler
     def car_collide(arbiter, space, data):
@@ -591,10 +603,11 @@ def playNEpisodes(n, env, model):
         obs = env.reset()
         for step in range(max_steps):
             action, _ = model.predict(obs, deterministic=True)
-            obs, reward, done, info = env.step(action, render=True)
+            obs, reward, done, info = env.step(action, render=True, training=False)
             if done:
                 print(f'Episode {episode} finished after {step} steps')
                 # Pause the game
+                unpause = False
                 while True:
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
@@ -602,7 +615,10 @@ def playNEpisodes(n, env, model):
                             return
                         if event.type == pygame.KEYDOWN:
                             if event.key == pygame.K_SPACE:
+                                unpause = True
                                 break
+                    if unpause:
+                        break
                     pygame.display.update()
                 break
 

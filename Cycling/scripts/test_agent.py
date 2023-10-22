@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # Load points
     # Pull waypoints from .gpx file
     points = removeDuplicatePoints(read_gpx('../gpx/windy_road.gpx', 1))
-    points = points[10:30]
+    points = points[30:70]
     points = scaleData(points)
     points = points * 900 + 50
     points = points[:, :2]
