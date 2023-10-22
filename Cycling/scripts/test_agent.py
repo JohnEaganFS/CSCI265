@@ -38,21 +38,28 @@ if __name__ == "__main__":
         new_points.append(points[-1])
         points = np.array(new_points)
 
-    min_vector_length = min([np.linalg.norm(points[i] - points[i + 1]) for i in range(len(points) - 1)]) * 2
+    # min_vector_length = min([np.linalg.norm(points[i] - points[i + 1]) for i in range(len(points) - 1)]) * 2
 
     # Create boundaries
-    boundary_points = define_boundaries(points, min_vector_length)
+    boundary_points = define_boundaries(points, 50)
 
     # Create environment
-    env = CustomRacing2DEnv()
-
+    env = CustomRacing2DEnv(points, boundary_points)
 
     # Load agent model
-    model = PPO.load("ppo_custom_racing_2d")
+    # model = PPO.load("ppo_custom_racing_2d")
+    model = PPO.load("../models/ppo_custom_racing_2d")
+
+    # # Train the agent on the new environment
+    # model.set_env(env)
+    # model.learn(total_timesteps=300000)
+
+    # # Save the agent
+    # model.save("../models/ppo_custom_racing_2d_exp_2")
 
     # Evaluate agent
-    mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
-    print(f"mean_reward:{mean_reward:.2f} +/- {std_reward}")
+    # mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
+    # print(f"mean_reward:{mean_reward:.2f} +/- {std_reward}")
 
     # Play episodes
     playNEpisodes(1, env, model)
