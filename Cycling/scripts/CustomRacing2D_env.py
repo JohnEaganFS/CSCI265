@@ -18,6 +18,7 @@ from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 # Simulation (pygame, pymunk)
 import pygame
@@ -102,7 +103,7 @@ FPS = 120
 
 # Pull waypoints from .gpx file
 points = removeDuplicatePoints(read_gpx('../gpx/windy_road.gpx', 1))
-points = points[100:200]
+points = points[10:30]
 points = scaleData(points)
 points = points * 900 + 50
 points = points[:, :2]
@@ -210,12 +211,12 @@ def sensorReading(sensor, car, space, sensor_range, heading):
     s_range = sensor_range
 
     sensor_vector = car.position + pymunk.Vec2d(s_range * np.cos(heading + sensor), s_range * np.sin(heading + sensor))
-    sensor_hit = space.segment_query_first(car.position, sensor_vector, 0, pymunk.ShapeFilter(categories=0b1, mask=pymunk.ShapeFilter.ALL_MASKS() ^ 0b1))
+    sensor_hit = space.segment_query(car.position, sensor_vector, 0, pymunk.ShapeFilter(categories=0b1, mask=pymunk.ShapeFilter.ALL_MASKS() ^ 0b1))
     if sensor_hit:
-        sensor_vector = sensor_hit.point
+        sensor_vector = sensor_hit[0].point
         sensor_reading = np.linalg.norm(sensor_vector - car.position)
     else:
-        sensor_reading = -1
+        sensor_reading = 1000
     return sensor_reading
 
 ### Environment ###
@@ -257,7 +258,7 @@ class CustomRacing2DEnv(gym.Env):
             'reward': 0,
             'cumulative_reward': 0,
         }
-        self.speed_limit = 100
+        self.speed_limit = 200
         self.steps_since_last_waypoint = 0
         self.steps_left = self.max_steps
         self.log = ''
@@ -339,7 +340,7 @@ class CustomRacing2DEnv(gym.Env):
             car.velocity = pymunk.Vec2d(0, 0)
             # Reset heading
             self.state['heading'] = -np.arctan2(v[1], v[0])
-            reward -= 10
+            reward -= 5
             self.steps_since_last_waypoint = 0
 
         # Update state
@@ -597,6 +598,8 @@ if __name__ == "__main__":
     # Create environment
     # env = CustomRacing2DEnv()
     env = trainParallel()
+    # env = DummyVecEnv([lambda: CustomRacing2DEnv()])
+    # env = VecNormalize(env)
 
     # Create model
     model = PPO('MlpPolicy', env, verbose=1)
