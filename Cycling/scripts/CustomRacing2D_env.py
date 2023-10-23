@@ -436,7 +436,7 @@ class CustomRacing2DEnv(gym.Env):
             draw_sensors(screen, self.state)
             draw_speed(screen, self.state['cars'][0][0].velocity.length, self.speed_limit)
             draw_braking(screen, self.state['is_braking'])
-        # draw_reward(screen, self.state_history[-1]['reward'], self.state_history[-1]['cumulative_reward'])
+        draw_reward(screen, self.state_history[-1]['reward'], self.state_history[-1]['cumulative_reward'])
         draw_cars(screen, self.state['cars'], self.car_color)
         draw_boundaries(screen, self.boundaries, self.state)
         # Update display (only update part of the screen that contains the car if training)
@@ -552,12 +552,12 @@ def draw_sensors(screen, state):
     pygame.draw.line(screen, (255, 255, 255), car.position, sensor_right, 1)
 
 def draw_reward(screen, reward, cumulative_reward):
-    # Write reward to screen
-    font = pygame.font.Font('freesansbold.ttf', 32)
-    text = font.render(f'Reward: {reward:.2f}', True, (255, 255, 255))
-    textRect = text.get_rect()
-    textRect.center = (500, 100)
-    screen.blit(text, textRect)
+    # # Write reward to screen
+    # font = pygame.font.Font('freesansbold.ttf', 32)
+    # text = font.render(f'Reward: {reward:.2f}', True, (255, 255, 255))
+    # textRect = text.get_rect()
+    # textRect.center = (500, 100)
+    # screen.blit(text, textRect)
     # Write cumulative reward to screen
     font = pygame.font.Font('freesansbold.ttf', 32)
     text = font.render(f'Cumulative Reward: {cumulative_reward:.2f}', True, (255, 255, 255))

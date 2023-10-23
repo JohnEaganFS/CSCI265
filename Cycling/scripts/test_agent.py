@@ -22,8 +22,8 @@ from CustomRacing2D_env import CustomRacing2DEnv, define_boundaries, boundaries,
 if __name__ == "__main__":
     # Load points
     # Pull waypoints from .gpx file
-    points = removeDuplicatePoints(read_gpx('../gpx/windy_road.gpx', 1))
-    points = points[40:60] # Good maps 10,30 70,90
+    original_points = removeDuplicatePoints(read_gpx('../gpx/windy_road.gpx', 1))
+    points = original_points[40:60] # Good maps 10,30 70,90
     points = scaleData(points)
     points = points * 900 + 50
     points = points[:, :2]
