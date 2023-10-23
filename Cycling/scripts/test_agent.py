@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # Load points
     # Pull waypoints from .gpx file
     points = removeDuplicatePoints(read_gpx('../gpx/windy_road.gpx', 1))
-    points = points[70:90]
+    points = points[70:90] # Good maps 10,30 70,90
     points = scaleData(points)
     points = points * 900 + 50
     points = points[:, :2]
@@ -62,4 +62,4 @@ if __name__ == "__main__":
     # print(f"mean_reward:{mean_reward:.2f} +/- {std_reward}")
 
     # Play episodes
-    playNEpisodes(10, env, model)
+    playNEpisodes(1, env, model)

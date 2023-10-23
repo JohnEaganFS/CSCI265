@@ -103,7 +103,7 @@ FPS = 120
 
 # Pull waypoints from .gpx file
 points = removeDuplicatePoints(read_gpx('../gpx/windy_road.gpx', 1))
-points = points[10:30]
+points = points[70:90]
 points = scaleData(points)
 points = points * 900 + 50
 points = points[:, :2]
@@ -197,19 +197,22 @@ def getNewSpeed(speed, throttle, speed_limit, vel, old_vel):
     # Add some noise to the force +- 0.05
     force += np.random.normal(0, 0.05)
 
+    # If braking, increase force
+    # if (force < 0):
+    #     force *= 5
+
     # Update speed
     new_speed = speed + force
 
     # Keep speed between -speed_limit and speed_limit
     if (new_speed > speed_limit):
         new_speed = speed_limit
-    elif (new_speed < -speed_limit):
-        new_speed = -speed_limit
+    elif (new_speed < 0):
+        new_speed = 0
 
     # If velocity has changed from old velocity, a collision has occurred (set speed to 0)
     did_collide = False
     if (abs(vel - old_vel) > 10):
-        new_speed = new_speed * 0.2
         did_collide = True
 
     return new_speed, did_collide
@@ -226,6 +229,14 @@ def sensorReading(sensor, car, space, sensor_range, heading):
     else:
         sensor_reading = 1000
     return sensor_reading
+
+def inPreviousWaypoints(boundaries, current_waypoint, car_position):
+    previousWaypoints = boundaries[:current_waypoint]
+    for i in range(len(previousWaypoints) - 1):
+        a, b, c, d = previousWaypoints[i][0], previousWaypoints[i][1], previousWaypoints[i + 1][0], previousWaypoints[i + 1][1]
+        if inPoly(car_position, [a, b, c, d]):
+            return True
+    return False 
 
 ### Environment ###
 class CustomRacing2DEnv(gym.Env):
@@ -274,7 +285,8 @@ class CustomRacing2DEnv(gym.Env):
             'cumulative_reward': 0,
             'reward_mean': 1,
             'reward_std': 1,
-            'old_velocity': 0
+            'old_velocity': 0,
+            'is_braking': False
         }
         self.speed_limit = 200
         self.steps_since_last_waypoint = 0
@@ -302,6 +314,10 @@ class CustomRacing2DEnv(gym.Env):
 
         # Get actions
         steer, throttle = action
+        if throttle < 0:
+            self.state['is_braking'] = True
+        else:
+            self.state['is_braking'] = False
         car = self.state['cars'][0][0]
 
         a, b = self.boundaries[self.state['next_waypoint']]
@@ -318,14 +334,16 @@ class CustomRacing2DEnv(gym.Env):
         self.state['heading'] = new_heading
         # Get new speed
         new_speed, collision_occured = getNewSpeed(self.state['speed'], throttle, self.speed_limit, car.velocity.length, self.state['old_velocity'])
-        self.state['speed'] = new_speed
         # If collision occured, penalty
         if collision_occured and not(inCurrentWaypoint) and not(inNextWaypoint):
+            new_speed = new_speed * 0.1
             # Make sure by seeing if the car is not within the boundaries of the track
             reward -= 1
             self.reset_count += 1
         else:
             self.reset_count = 0
+
+        self.state['speed'] = new_speed
 
         # Update car velocity
         car.velocity = pymunk.Vec2d(new_speed * np.cos(new_heading), new_speed * np.sin(new_heading))
@@ -339,7 +357,7 @@ class CustomRacing2DEnv(gym.Env):
 
         # Get sensor readings
         s_range = self.state['sensor_range']
-        sensor_front = sensorReading(0, car, self.state['space'], s_range, new_heading)
+        sensor_front = sensorReading(0, car, self.state['space'], s_range+30, new_heading)
         sensor_left = sensorReading(-np.pi / 2, car, self.state['space'], s_range, new_heading)
         sensor_right = sensorReading(np.pi / 2, car, self.state['space'], s_range, new_heading)
         self.state['sensor_front'] = sensor_front
@@ -359,27 +377,10 @@ class CustomRacing2DEnv(gym.Env):
             reward += 0
             self.steps_since_last_waypoint += 1
         # Else if in neither waypoint, either the car is off the track or it is going backwards
-        else:
-            # Penalize for not making progress and scale penalty by the number of steps since the last waypoint
-            reward -= 0.001
-            # reward -= 0.0001 * self.steps_since_last_waypoint
-            # # If steps since last waypoint is greater than 100, i.e. allow the car to go backwards for 100 steps
-            # if self.steps_since_last_waypoint >= 100:
-            #     # Reset car to current waypoint
-            #     (x, y) = self.state['waypoints'][self.state['current_waypoint']]
-            #     v = self.state['waypoints'][self.state['next_waypoint']] - self.state['waypoints'][self.state['current_waypoint']]
-            #     # Start the car a little bit away from the current waypoint if it is the first waypoint
-            #     if self.state['current_waypoint'] == 0:
-            #         x += v[0] * 0.1
-            #         y += v[1] * 0.1
-            #     car.position = (x, y)
-            #     # Reset car velocity
-            #     self.state['speed'] = 0
-            #     car.velocity = pymunk.Vec2d(0, 0)
-            #     # Reset heading
-            #     self.state['heading'] = -np.arctan2(v[1], v[0])
-            #     reward -= 1
-            #     self.steps_since_last_waypoint = 0
+        elif inPreviousWaypoints(self.boundaries, self.state['current_waypoint'], car.position):
+            reward -= 1
+            self.steps_since_last_waypoint += 1
+            
 
         # Update state
         if (self.state['next_waypoint'] < len(self.state['waypoints']) - 1):
@@ -424,7 +425,7 @@ class CustomRacing2DEnv(gym.Env):
         # Draw stuff
         car_position = self.state['cars'][0][0].position
         # Every 10 episodes, reset the screen
-        if not(self.has_reset_screen) and self.num_episodes % 50 == 0:
+        if not(self.has_reset_screen) and self.num_episodes % 30 == 0:
             screen.fill((0, 0, 0))
             self.has_reset_screen = True
         if not(training):
@@ -434,12 +435,13 @@ class CustomRacing2DEnv(gym.Env):
             draw_timestep(screen, self.state_history)
             draw_sensors(screen, self.state)
             draw_speed(screen, self.state['cars'][0][0].velocity.length, self.speed_limit)
+            draw_braking(screen, self.state['is_braking'])
         # draw_reward(screen, self.state_history[-1]['reward'], self.state_history[-1]['cumulative_reward'])
         draw_cars(screen, self.state['cars'], self.car_color)
         draw_boundaries(screen, self.boundaries, self.state)
         # Update display (only update part of the screen that contains the car if training)
         if training:
-            if self.num_episodes % 50 == 0:
+            if self.num_episodes % 30 == 0:
                 pygame.display.update()
             else:
                 pygame.display.update((car_position[0] - 20, car_position[1] - 20, 40, 40))
@@ -592,6 +594,15 @@ def draw_boundaries(screen, boundaries, state):
     pygame.draw.line(screen, (255, 255, 255), d1, c1, 1)
     pygame.draw.line(screen, (255, 255, 255), c1, a1, 1)
 
+def draw_braking(screen, is_braking):
+    if is_braking:
+        # Write braking to screen
+        font = pygame.font.Font('freesansbold.ttf', 32)
+        text = font.render(f'Braking', True, (255, 255, 255))
+        textRect = text.get_rect()
+        textRect.center = (500, 200)
+        screen.blit(text, textRect)
+
 def game():
     # Collision handler
     def car_collide(arbiter, space, data):
@@ -673,7 +684,7 @@ def playNEpisodes(n, env, model):
         obs = env.reset()
         for step in range(max_steps):
             action, _ = model.predict(obs, deterministic=True)
-            obs, reward, done, info = env.step(action, render=True, training=True)
+            obs, reward, done, info = env.step(action, render=True, training=False)
             if done:
                 print(f'Episode {episode} finished after {step} steps')
                 # Pause the game
