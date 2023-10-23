@@ -244,6 +244,7 @@ class CustomRacing2DEnv(gym.Env):
         # Increment number of episodes
         self.num_episodes += 1
         self.has_reset_screen = False
+        self.reset_count = 0
 
         waypoints = self.original_points.copy()
         # full_boundary_points = np.array([boundaries(waypoints[i], waypoints[i + 1], min_vector_length) for i in range(len(waypoints) - 1)])
@@ -321,7 +322,10 @@ class CustomRacing2DEnv(gym.Env):
         # If collision occured, penalty
         if collision_occured and not(inCurrentWaypoint) and not(inNextWaypoint):
             # Make sure by seeing if the car is not within the boundaries of the track
-            reward -= 10
+            reward -= 1
+            self.reset_count += 1
+        else:
+            self.reset_count = 0
 
         # Update car velocity
         car.velocity = pymunk.Vec2d(new_speed * np.cos(new_heading), new_speed * np.sin(new_heading))
@@ -348,7 +352,7 @@ class CustomRacing2DEnv(gym.Env):
             self.state['current_waypoint'] += 1
             self.state['next_waypoint'] += 1
             # reward += 1000 / len(self.state['waypoints'])
-            reward += 10
+            reward += 2
             self.steps_since_last_waypoint = 0
         # Else if in the current waypoint, do nothing
         elif inCurrentWaypoint:
@@ -392,7 +396,7 @@ class CustomRacing2DEnv(gym.Env):
             self.state['next_waypoint'] == len(self.state['waypoints']) - 1,
             # If the car has run out of steps, end the episode
             self.steps_left == 0,
-            collision_occured and not(inCurrentWaypoint) and not(inNextWaypoint)
+            collision_occured and not(inCurrentWaypoint) and not(inNextWaypoint) and self.reset_count >= 5
         ])
 
         # if (done and self.steps_since_last_waypoint >= 500):
@@ -669,11 +673,11 @@ def playNEpisodes(n, env, model):
         obs = env.reset()
         for step in range(max_steps):
             action, _ = model.predict(obs, deterministic=True)
-            obs, reward, done, info = env.step(action, render=True, training=False)
+            obs, reward, done, info = env.step(action, render=True, training=True)
             if done:
                 print(f'Episode {episode} finished after {step} steps')
                 # Pause the game
-                unpause = False
+                unpause = not(episode == n - 1)
                 while True:
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
