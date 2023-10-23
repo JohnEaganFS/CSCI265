@@ -542,7 +542,7 @@ def draw_timestep(screen, state_history):
 def draw_sensors(screen, state):
     # Draw front sensor
     car = state['cars'][0][0]
-    sensor_front = car.position + pymunk.Vec2d(state['sensor_range'] * np.cos(state['heading']), state['sensor_range'] * np.sin(state['heading']))
+    sensor_front = car.position + pymunk.Vec2d((state['sensor_range']+30) * np.cos(state['heading']), (state['sensor_range']+30) * np.sin(state['heading']))
     pygame.draw.line(screen, (255, 255, 255), car.position, sensor_front, 1)
     # Draw left sensor
     sensor_left = car.position + pymunk.Vec2d(state['sensor_range'] * np.cos(state['heading'] + np.pi / 2), state['sensor_range'] * np.sin(state['heading'] + np.pi / 2))
