@@ -89,7 +89,7 @@ def inPoly(point, path_points):
 
 ### Global Variables ###
 max_steps = 2000
-total_timesteps = 300000
+total_timesteps = 2000000
 n = 1
 
  # Create pymunk space
@@ -174,10 +174,11 @@ def getNewHeading(heading_angle, steering_angle):
     Returns the new heading of the agent based on the current heading angle and steering angle.
     In other words, just adds the steering angle to the heading angle.
     '''
+    # Add some noise to the steering angle
+    noise = np.random.normal(0, 0.05)
+    steering_angle += noise
     # Resize steering angle between -pi/128 and pi/128
     steering_angle = steering_angle * np.pi / 128
-    # Add some noise to the steering angle
-    steering_angle += np.random.normal(0, 0.001)
     new_angle = heading_angle - steering_angle
     # Keep the angle between -pi and pi
     if (new_angle > np.pi):
@@ -276,7 +277,7 @@ class CustomRacing2DEnv(gym.Env):
             'sensor_right': -1,
             'current_waypoint': 0,
             'next_waypoint': 1,
-            'sensor_range': 15,
+            'sensor_range': 30,
             'waypoints': waypoints,
             'space': space,
             'cars': cars,
@@ -302,7 +303,7 @@ class CustomRacing2DEnv(gym.Env):
     def observation(self):
         return np.array([self.state[obs] for obs in self.observations])
 
-    def step(self, action, render=True, training=True):
+    def step(self, action, render=False, training=True):
         ### Ideas
         # if doesn't move to next waypoint in <=100 steps, end episode
         # maybe a reset action to reset the car to the current waypoint (have to watch out for cheating)
@@ -338,7 +339,8 @@ class CustomRacing2DEnv(gym.Env):
         if collision_occured and not(inCurrentWaypoint) and not(inNextWaypoint):
             new_speed = new_speed * 0.1
             # Make sure by seeing if the car is not within the boundaries of the track
-            reward -= 1
+            # if reward > 0:
+            #     reward -= 1000*len(self.state['waypoints'])
             self.reset_count += 1
         else:
             self.reset_count = 0
@@ -369,8 +371,8 @@ class CustomRacing2DEnv(gym.Env):
         if inNextWaypoint:
             self.state['current_waypoint'] += 1
             self.state['next_waypoint'] += 1
-            # reward += 1000 / len(self.state['waypoints'])
-            reward += 2
+            reward += 1000 / len(self.state['waypoints'])
+            # reward += 2
             self.steps_since_last_waypoint = 0
         # Else if in the current waypoint, do nothing
         elif inCurrentWaypoint:
@@ -402,6 +404,12 @@ class CustomRacing2DEnv(gym.Env):
 
         # if (done and self.steps_since_last_waypoint >= 500):
         #     reward -= 1
+
+        if collision_occured:
+            # If collision occurred, set reward to 0 and remove cumulative reward
+            if reward > 0:
+                reward = -self.state['cumulative_reward'] - reward
+
 
         self.state['reward'] = reward
         self.state['cumulative_reward'] += reward
@@ -436,7 +444,7 @@ class CustomRacing2DEnv(gym.Env):
             draw_sensors(screen, self.state)
             draw_speed(screen, self.state['cars'][0][0].velocity.length, self.speed_limit)
             draw_braking(screen, self.state['is_braking'])
-        draw_reward(screen, self.state_history[-1]['reward'], self.state_history[-1]['cumulative_reward'])
+            draw_reward(screen, self.state_history[-1]['reward'], self.state_history[-1]['cumulative_reward'])
         draw_cars(screen, self.state['cars'], self.car_color)
         draw_boundaries(screen, self.boundaries, self.state)
         # Update display (only update part of the screen that contains the car if training)
@@ -713,7 +721,7 @@ def make_env(env_id: str, rank: int, seed: int = 0) -> Callable:
     return _init
 
 def trainParallel():
-    n_cpu = 10
+    n_cpu = 8
     env = make_vec_env(CustomRacing2DEnv, n_envs=n_cpu, seed=0)
     return env
 
