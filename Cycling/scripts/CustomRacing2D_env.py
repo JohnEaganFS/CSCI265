@@ -18,8 +18,7 @@ from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
-from sb3_contrib import RecurrentPPO
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize, VecFrameStack
 
 # Simulation (pygame, pymunk)
 import pygame
@@ -92,9 +91,6 @@ def inPoly(point, path_points):
 max_steps = 2000
 total_timesteps = 300000
 n = 1
-
- # Create pymunk space
-space = pymunk.Space()
 
 # Initialize pygame
 pygame.init()
@@ -754,6 +750,7 @@ if __name__ == "__main__":
     # env = trainParallel()
     # env = DummyVecEnv([lambda: CustomRacing2DEnv()])
     # env = VecNormalize(env)
+    # env = VecFrameStack(env, n_stack=4)
 
     # Create model
     model = PPO('MlpPolicy', env, verbose=1)
