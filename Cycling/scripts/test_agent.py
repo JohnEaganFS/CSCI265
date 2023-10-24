@@ -10,6 +10,7 @@ import gym
 # SB3
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.evaluation import evaluate_policy
+from sb3_contrib import RecurrentPPO
 
 # Simulation (pygame, pymunk)
 import pygame

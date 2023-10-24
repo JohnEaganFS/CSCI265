@@ -19,6 +19,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+from sb3_contrib import RecurrentPPO
 
 # Simulation (pygame, pymunk)
 import pygame
@@ -89,7 +90,7 @@ def inPoly(point, path_points):
 
 ### Global Variables ###
 max_steps = 2000
-total_timesteps = 2000000
+total_timesteps = 100000
 n = 1
 
  # Create pymunk space
@@ -408,6 +409,7 @@ class CustomRacing2DEnv(gym.Env):
         if collision_occured:
             # If collision occurred, set reward to 0 and remove cumulative reward
             if reward > 0:
+                print('collision occured')
                 reward = -self.state['cumulative_reward'] - reward
 
 
