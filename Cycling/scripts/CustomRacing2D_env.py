@@ -8,7 +8,7 @@ create the "walls" of the track and the "car" that will be racing around the tra
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.path as mplPath
-from typing import Callable
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 # Gym
 import gym
@@ -90,7 +90,7 @@ def inPoly(point, path_points):
 
 ### Global Variables ###
 max_steps = 2000
-total_timesteps = 100000
+total_timesteps = 300000
 n = 1
 
  # Create pymunk space
@@ -127,7 +127,7 @@ boundary_points = define_boundaries(points, 50)
 
 
 ### Observations ###
-observations = ['vector_x', 'vector_y', 'speed', 'heading', 'sensor_front', 'sensor_left', 'sensor_right']
+observations = ['vector_x', 'vector_y', 'speed', 'heading', 'sensor_front', 'sensor_left', 'sensor_right', 'past_sensor_front', 'past_sensor_left', 'past_sensor_right']
 
 def defineObservationSpace():
     lows = {
@@ -137,7 +137,10 @@ def defineObservationSpace():
         'heading': -np.pi,
         'sensor_front': -1,
         'sensor_left': -1,
-        'sensor_right': -1
+        'sensor_right': -1,
+        'past_sensor_front': -1,
+        'past_sensor_left': -1,
+        'past_sensor_right': -1,
     }
     highs = {
         'vector_x': np.inf,
@@ -146,11 +149,26 @@ def defineObservationSpace():
         'heading': np.pi,
         'sensor_front': np.inf,
         'sensor_left': np.inf,
-        'sensor_right': np.inf
+        'sensor_right': np.inf,
+        'past_sensor_front': np.inf,
+        'past_sensor_left': np.inf,
+        'past_sensor_right': np.inf,
     }
     low = np.array([lows[obs] for obs in observations])
     high = np.array([highs[obs] for obs in observations])
     return gym.spaces.Box(low, high, dtype=np.float32)
+
+# observations = ['vec', 'speed', 'heading', 'sensors']
+
+# def defineObservationSpace():
+#     return gym.spaces.Dict(
+#         spaces = {
+#             "vec": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32),
+#             "speed": gym.spaces.Box(low=0, high=10, shape=(1,), dtype=np.float32),
+#             "heading": gym.spaces.Box(low=-np.pi, high=np.pi, shape=(1,), dtype=np.float32),
+#             "sensors": gym.spaces.Box(low=-1, high=np.inf, shape=(3,), dtype=np.float32),
+#         }
+#     )
 
 ### Actions ###
 actions = ['steer', 'throttle']
@@ -276,6 +294,9 @@ class CustomRacing2DEnv(gym.Env):
             'sensor_front': -1,
             'sensor_left': -1,
             'sensor_right': -1,
+            'past_sensor_front': -1,
+            'past_sensor_left': -1,
+            'past_sensor_right': -1,
             'current_waypoint': 0,
             'next_waypoint': 1,
             'sensor_range': 30,
@@ -304,7 +325,7 @@ class CustomRacing2DEnv(gym.Env):
     def observation(self):
         return np.array([self.state[obs] for obs in self.observations])
 
-    def step(self, action, render=False, training=True):
+    def step(self, action, render=True, training=True):
         ### Ideas
         # if doesn't move to next waypoint in <=100 steps, end episode
         # maybe a reset action to reset the car to the current waypoint (have to watch out for cheating)
@@ -363,6 +384,7 @@ class CustomRacing2DEnv(gym.Env):
         sensor_front = sensorReading(0, car, self.state['space'], s_range+30, new_heading)
         sensor_left = sensorReading(-np.pi / 2, car, self.state['space'], s_range, new_heading)
         sensor_right = sensorReading(np.pi / 2, car, self.state['space'], s_range, new_heading)
+        self.state['past_sensor_front'], self.state['past_sensor_left'], self.state['past_sensor_right'] = self.state['sensor_front'], self.state['sensor_left'], self.state['sensor_right']
         self.state['sensor_front'] = sensor_front
         self.state['sensor_left'] = sensor_left
         self.state['sensor_right'] = sensor_right
@@ -381,7 +403,7 @@ class CustomRacing2DEnv(gym.Env):
             self.steps_since_last_waypoint += 1
         # Else if in neither waypoint, either the car is off the track or it is going backwards
         elif inPreviousWaypoints(self.boundaries, self.state['current_waypoint'], car.position):
-            reward -= 1
+            reward -= 0.1
             self.steps_since_last_waypoint += 1
             
 
@@ -406,12 +428,11 @@ class CustomRacing2DEnv(gym.Env):
         # if (done and self.steps_since_last_waypoint >= 500):
         #     reward -= 1
 
-        if collision_occured:
+        if collision_occured or (done and self.steps_since_last_waypoint >= 500):
             # If collision occurred, set reward to 0 and remove cumulative reward
-            if reward > 0:
-                print('collision occured')
+            if self.state['cumulative_reward'] > 0:
+                # print('collision occured')
                 reward = -self.state['cumulative_reward'] - reward
-
 
         self.state['reward'] = reward
         self.state['cumulative_reward'] += reward
