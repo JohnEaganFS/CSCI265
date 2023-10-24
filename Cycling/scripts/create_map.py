@@ -65,7 +65,7 @@ def draw_waypoints(screen, waypoints):
         # Draw points
         pygame.draw.circle(screen, (0, 255, 0), waypoints[i], 2)
 
-def draw_boundaries(screen, boundary_points, size=2, fill_inside=False, color=(255, 255, 255)):
+def draw_boundaries(screen, boundary_points, size=2, fill_inside=False, color=(255, 255, 255), draw_sides=False):
     # Draw lines
     for i, bp in enumerate(boundary_points):
         # If first or last point, draw a line between bp[0] and bp[1]
@@ -85,6 +85,9 @@ def draw_boundaries(screen, boundary_points, size=2, fill_inside=False, color=(2
             # Quad
             pygame.draw.polygon(screen, color, (boundary_points[i][0], boundary_points[i][1], boundary_points[i + 1][1], boundary_points[i + 1][0]))
         
+    if draw_sides:
+        for bp in boundary_points:
+            pygame.draw.line(screen, (0, 0, 0), bp[0], bp[1], 3)
 
 ### Classes ###
 class Map:
@@ -133,7 +136,7 @@ if __name__ == "__main__":
     waypoints_with_added_points = np.insert(waypoints_with_added_points, len(waypoints_with_added_points), waypoints[-1] - v_end * 12, axis=0)
 
     # Define boundaries with bigger track width
-    boundary_points_big = define_boundaries(waypoints_with_added_points, track_width + 25)
+    boundary_points_big = define_boundaries(waypoints_with_added_points, track_width + 50)
     boundary_points_bigger = define_boundaries(waypoints_with_added_points, track_width + 100)
 
     # Initialize pygame
@@ -143,7 +146,7 @@ if __name__ == "__main__":
     # draw_waypoints(screen, waypoints)
     screen.fill((0, 0, 0))
     # draw_boundaries(screen, boundary_points_bigger, 5, fill_inside=True, color = (0,0,255))
-    draw_boundaries(screen, boundary_points_big, 5, fill_inside=True)
+    draw_boundaries(screen, boundary_points_big, 2, fill_inside=True, draw_sides=True)
     draw_boundaries(screen, boundary_points, 5, fill_inside=True, color = (0,0,0))
     # while True:
     #     # Check for quit event
@@ -159,7 +162,7 @@ if __name__ == "__main__":
     pixel_values = pixel_values[:, :, 0] / 255
 
     # Use autogeometry to create a polygon from the boundary points
-    pl_set = march_soft(pymunk.BB(0, 0, SCREEN_WIDTH-1, SCREEN_HEIGHT-1), 80, 50, sample_func=sample_func, threshold=0.001)
+    pl_set = march_soft(pymunk.BB(0, 0, SCREEN_WIDTH-1, SCREEN_HEIGHT-1), 500, 500, sample_func=sample_func, threshold=0.0001)
 
     # Create a pymunk space
     space = pymunk.Space()
