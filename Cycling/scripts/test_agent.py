@@ -10,7 +10,6 @@ import gym
 # SB3
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.evaluation import evaluate_policy
-from sb3_contrib import RecurrentPPO
 
 # Simulation (pygame, pymunk)
 import pygame
@@ -49,7 +48,7 @@ if __name__ == "__main__":
 
     # Load agent model
     # model = PPO.load("ppo_custom_racing_2d")
-    model = PPO.load("../models/temp_model")
+    model = PPO.load("../models/saved_models/temp_model")
 
     # # Train the agent on the new environment
     # model.set_env(env)
@@ -63,4 +62,4 @@ if __name__ == "__main__":
     # print(f"mean_reward:{mean_reward:.2f} +/- {std_reward}")
 
     # Play episodes
-    playNEpisodes(1, env, model)
+    playNEpisodes(5, env, model)

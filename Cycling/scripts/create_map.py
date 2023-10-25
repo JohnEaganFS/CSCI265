@@ -2,6 +2,7 @@
 # Standard
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle
 
 # Simulation
 import pygame
@@ -11,7 +12,7 @@ from pymunk.vec2d import Vec2d
 
 # Custom (other scripts)
 from read_gpx import read_gpx, removeDuplicatePoints, scaleData
-from CustomRacing2D_env import boundaries, define_boundaries, inPoly
+from CustomRacing2D_env import define_boundaries
 
 ### Global Variables ###
 # Pygame parameters
@@ -20,7 +21,7 @@ SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 1000
 
 # Waypoint stuff
-start, amount = 70, 20
+start, amount = 10, 50
 add_points_iterations = 5
 total_waypoints = 50
 track_width = 60
@@ -132,8 +133,8 @@ if __name__ == "__main__":
     v_begin = v_begin / np.linalg.norm(v_begin)
     v_end = v_end / np.linalg.norm(v_end)
     waypoints_with_added_points = np.copy(waypoints)
-    waypoints_with_added_points = np.insert(waypoints_with_added_points, 0, waypoints[0] - v_begin * 12, axis=0)
-    waypoints_with_added_points = np.insert(waypoints_with_added_points, len(waypoints_with_added_points), waypoints[-1] - v_end * 12, axis=0)
+    waypoints_with_added_points = np.insert(waypoints_with_added_points, 0, waypoints[0] - v_begin * 20, axis=0)
+    waypoints_with_added_points = np.insert(waypoints_with_added_points, len(waypoints_with_added_points), waypoints[-1] - v_end * 20, axis=0)
 
     # Define boundaries with bigger track width
     boundary_points_big = define_boundaries(waypoints_with_added_points, track_width + 50)
@@ -166,12 +167,14 @@ if __name__ == "__main__":
 
     # Create a pymunk space
     space = pymunk.Space()
-    space.gravity = (0, 100)
     for pl in pl_set:
         # Create static polygons
         poly = pymunk.Poly(space.static_body, pl)
-        poly.elasticity = 1
+        poly.elasticity = 0.2
         space.add(poly)
+    
+    # Create a copy with just the static polygons (raw map)
+    space_static = space.copy()
 
         # for i in range(len(pl) - 1):
         #     space.add(pymunk.Segment(space.static_body, pl[i], pl[i + 1], 1))
@@ -181,7 +184,9 @@ if __name__ == "__main__":
     ball_shape = pymunk.Circle(ball, 5)
     ball_shape.color = (0, 0, 255)
     ball_shape.elasticity = 1
-    ball.position = (550, 500)
+    ball.position = (waypoints[1][0], waypoints[1][1])
+    ball.velocity = (200, 200)
+    length = np.linalg.norm(ball.velocity)
 
     # Add the ball to the space
     space.add(ball, ball_shape)
@@ -193,6 +198,8 @@ if __name__ == "__main__":
     
     def separate(arbiter, space, data):
         print("Separation!")
+        # Reset the ball velocity
+        ball.velocity = ball.velocity / np.linalg.norm(ball.velocity) * length
         return True
 
     handler = space.add_collision_handler(0, 0)
@@ -200,12 +207,21 @@ if __name__ == "__main__":
     handler.separate = separate
 
     # Render the screen
-    while True:
+    exit_render = False
+    while not exit_render:
         # Check for quit event
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                exit()
+                exit_render = True
+        # Check for key presses
+        pressed = pygame.key.get_pressed()
+        if pressed[pygame.K_ESCAPE]:
+            exit_render = True
+        elif pressed[pygame.K_y]:
+            # Save the pymunk static space with pickle (filename should be map_{start, start+amount})
+            with open("../maps/map_" + str(start) + "_" + str(start + amount) + ".pkl", "wb") as f:
+                pickle.dump(space_static, f)
+
         # Draw ball
         screen.fill((0, 0, 0))
         pygame.draw.circle(screen, (0, 0, 255), (int(ball.position[0]), int(ball.position[1])), 5)
@@ -231,11 +247,9 @@ if __name__ == "__main__":
         # Update the ball
         space.step(1 / FPS)
 
+    # Quit pygame
+    pygame.quit()
 
-
-
-    
-
-
-    
-
+    # # Load the pymunk space with pickle
+    # with open("../maps/map.pkl", "rb") as f:
+    #     space = pickle.load(f)
