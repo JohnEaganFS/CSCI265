@@ -17,11 +17,11 @@ from CustomRacing2D_env import define_boundaries
 ### Global Variables ###
 # Pygame parameters
 FPS = 120
-SCREEN_WIDTH = 1000
-SCREEN_HEIGHT = 1000
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 800
 
 # Waypoint stuff
-start, amount = 10, 50
+start, amount = 10, 20
 add_points_iterations = 5
 total_waypoints = 50
 track_width = 60
@@ -165,6 +165,10 @@ if __name__ == "__main__":
     # Use autogeometry to create a polygon from the boundary points
     pl_set = march_soft(pymunk.BB(0, 0, SCREEN_WIDTH-1, SCREEN_HEIGHT-1), 500, 500, sample_func=sample_func, threshold=0.0001)
 
+    pl_copy = []
+    for pl in pl_set:
+        pl_copy.append(pl.copy())
+
     # Create a pymunk space
     space = pymunk.Space()
     for pl in pl_set:
@@ -218,9 +222,10 @@ if __name__ == "__main__":
         if pressed[pygame.K_ESCAPE]:
             exit_render = True
         elif pressed[pygame.K_y]:
-            # Save the pymunk static space with pickle (filename should be map_{start, start+amount})
-            with open("../maps/map_" + str(start) + "_" + str(start + amount) + ".pkl", "wb") as f:
-                pickle.dump(space_static, f)
+            # Save the pymunk static space with pickle (filename should be map_{start, start+amount}_{screen_width}_{screen_height}.pkl)
+            with open("../maps/map_" + str(start) + "_" + str(start + amount) + "_" + str(SCREEN_WIDTH) + "_" + str(SCREEN_HEIGHT) + ".pkl", "wb") as f:
+                # Also save the waypoints and boundary points and screen width and height and the pl_set
+                pickle.dump((space_static, waypoints, boundary_points, (SCREEN_WIDTH, SCREEN_HEIGHT), pl_copy), f)
 
         # Draw ball
         screen.fill((0, 0, 0))
