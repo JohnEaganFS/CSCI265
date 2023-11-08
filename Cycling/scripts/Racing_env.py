@@ -202,14 +202,17 @@ class RacingEnv(gym.Env):
         return observation
 
     def reset(self):
+        self.car.position = self.points[0][0], self.points[0][1]
     
         self.state = {
             'position': self.points[0],
-            'heading': np.random.uniform(-np.pi, np.pi),
-            'speed': 0,
+            'heading': np.arctan2(self.points[1][1] - self.points[0][1], self.points[1][0] - self.points[0][0]),
+            'speed': 50,
             'current_waypoint': 0,
             'next_waypoint': 1
         }
+        self.car.velocity = (self.state['speed']*np.cos(self.state['heading']), self.state['speed']*np.sin(self.state['heading']))
+
         self.steps_left = self.max_steps
         self.speed_limit = 200
 
@@ -232,6 +235,9 @@ class RacingEnv(gym.Env):
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     return True
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        self.reset()
         
                 
             # Update the space
