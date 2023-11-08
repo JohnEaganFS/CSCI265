@@ -12,6 +12,7 @@ import gym
 # SB3
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.env_util import make_vec_env
 
 # Simulation (pygame, pymunk)
 import pygame
@@ -77,7 +78,7 @@ def getNewSpeed(speed, throttle, speed_limit):
 # Model parameters
 max_steps = 1000
 total_timesteps = 300000
-observation_size = 50
+observation_size = 64
 
 # Pygame parameters
 FPS = 120
@@ -124,6 +125,7 @@ class RacingEnv(gym.Env):
         self.max_steps = max_steps
         self.waypoint_reward = 0
         self.collision_penalty = 0
+        self.previous_car_pos = (self.points[0][0], self.points[0][1])
         # self.reward_range = (-np.inf, np.inf)
 
         # Add the car to the space
@@ -186,6 +188,12 @@ class RacingEnv(gym.Env):
         # Get car position
         car_pos = self.car.position
 
+        # Clear the previous car position
+        pygame.draw.circle(self.screen, (0, 0, 0), (int(self.previous_car_pos[0]), int(self.previous_car_pos[1])), 1)
+
+        # Redraw the waypoints
+        draw_waypoints(self.screen, self.points, self.state['current_waypoint'], self.state['next_waypoint'])
+
         # Draw the new car position
         pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 1)
 
@@ -200,6 +208,9 @@ class RacingEnv(gym.Env):
     def reset(self):
         self.car.position = self.points[0][0], self.points[0][1]
         self.waypoint_reward = 0
+        self.collision_penalty = 0
+        pygame.draw.circle(self.screen, (0, 0, 0), (int(self.previous_car_pos[0]), int(self.previous_car_pos[1])), 1)
+        self.previous_car_pos = (self.points[0][0], self.points[0][1])
     
         self.state = self.initial_state.copy()
         self.car.velocity = (self.state['speed']*np.cos(self.state['heading']), self.state['speed']*np.sin(self.state['heading']))
@@ -233,6 +244,7 @@ class RacingEnv(gym.Env):
         # pygame.display.flip()
 
         # Update state
+        self.previous_car_pos = self.state['position']
         self.state['position'] = self.car.position
 
         # Update steps left
@@ -244,6 +256,7 @@ class RacingEnv(gym.Env):
 
         # Check for wall collision penalty
         reward += self.collision_penalty
+        self.collision_penalty = 0
 
         # Check for done
         done = any([
@@ -313,7 +326,7 @@ class RacingEnv(gym.Env):
         # print("Collision with waypoint segment", waypoint_index)
 
         if waypoint_index > self.state['current_waypoint']:
-            self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoint'])
+            self.waypoint_reward = 2 * (waypoint_index - self.state['current_waypoint'])
             self.state['current_waypoint'] = waypoint_index
             self.state['next_waypoint'] = waypoint_index + 1
             self.state['steps_since_last_waypoint'] = 0
@@ -330,12 +343,16 @@ class RacingEnv(gym.Env):
         # Remove speed from the car
         self.state['speed'] = 0
         # Add reward penalty later
-        self.collision_penalty = -0.1
+        self.collision_penalty = -1
         return True
 
     def collisionSeparateWalls(self, arbiter, space, data):
         self.collision_penalty = 0
         return True
+
+    def seed(self, seed=None):
+        self.np_random, seed = gym.utils.seeding.np_random(seed)
+        return [seed]
 
 ### Environment Functions ###
 def create_car(pos):
@@ -369,14 +386,19 @@ def playNEpisodes(n, env, model):
                                 break
                 break
 
+    
+
 ### Main ###
 if __name__ == "__main__":
 
     # Initialize environment
     env = RacingEnv("../maps/map_10_30_800_800.pkl")
 
+    # Parallelize environment
+    vec_env = make_vec_env(lambda: env, n_envs=8)
+
     # Create model
-    model = PPO("CnnPolicy", env, verbose=1)
+    model = PPO("MlpPolicy", vec_env, verbose=1)
 
     # Train model
     model.learn(total_timesteps=total_timesteps)
