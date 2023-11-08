@@ -103,6 +103,7 @@ class RacingEnv(gym.Env):
         self.action_space = defineActionSpace()
         self.observation_size = observation_size
         self.max_steps = max_steps
+        self.waypoint_reward = 0
         # self.reward_range = (-np.inf, np.inf)
 
         # Add the car to the space
@@ -131,12 +132,6 @@ class RacingEnv(gym.Env):
             self.waypoint_segments.append(poly)
             self.space.add(poly)
 
-            # segment = pymunk.Segment(self.space.static_body, (self.points[i][0], self.points[i][1]), (self.points[i + 1][0], self.points[i + 1][1]), 25)
-            # segment.sensor = True
-            # segment.collision_type = 2
-            # self.waypoint_segments.append(segment)
-            # self.space.add(segment)
-
 
         # Add collision handler
         self.collision_handler = self.space.add_collision_handler(1, 2)
@@ -151,6 +146,7 @@ class RacingEnv(gym.Env):
             'next_waypoint': 1
         }
 
+        self.initial_state = self.state.copy()
         self.car.velocity = (self.state['speed']*np.cos(self.state['heading']), self.state['speed']*np.sin(self.state['heading']))
 
         # self.observation()
@@ -164,7 +160,7 @@ class RacingEnv(gym.Env):
         self.screen.fill((0, 0, 0))
 
         # Draw waypoints
-        draw_waypoints(self.screen, self.points, 0, 1)
+        draw_waypoints(self.screen, self.points, self.state['current_waypoint'], self.state['next_waypoint'])
         # Draw walls
         draw_walls(self.screen, self.walls)
 
@@ -178,10 +174,6 @@ class RacingEnv(gym.Env):
         arrow_x = car_pos[0] + arrow_length*np.cos(arrow_angle)
         arrow_y = car_pos[1] + arrow_length*np.sin(arrow_angle)
         pygame.draw.line(self.screen, (255, 255, 0), car_pos, (arrow_x, arrow_y))
-
-        # Update screen
-        pygame.display.flip()
-        self.clock.tick(FPS)
 
         # Get observation (100x100 image around the car)
         # Define sub-surface
@@ -203,14 +195,9 @@ class RacingEnv(gym.Env):
 
     def reset(self):
         self.car.position = self.points[0][0], self.points[0][1]
+        self.waypoint_reward = 0
     
-        self.state = {
-            'position': self.points[0],
-            'heading': np.arctan2(self.points[1][1] - self.points[0][1], self.points[1][0] - self.points[0][0]),
-            'speed': 50,
-            'current_waypoint': 0,
-            'next_waypoint': 1
-        }
+        self.state = self.initial_state.copy()
         self.car.velocity = (self.state['speed']*np.cos(self.state['heading']), self.state['speed']*np.sin(self.state['heading']))
 
         self.steps_left = self.max_steps
@@ -238,7 +225,6 @@ class RacingEnv(gym.Env):
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
                         self.reset()
-        
                 
             # Update the space
             self.space.step(1/FPS)
@@ -247,7 +233,7 @@ class RacingEnv(gym.Env):
             self.screen.fill((0, 0, 0))
 
             # Draw waypoints
-            draw_waypoints(self.screen, self.points, 0, 1)
+            draw_waypoints(self.screen, self.points, self.state['current_waypoint'], self.state['next_waypoint'])
             # Draw waypoint segments
             draw_waypoint_segments(self.screen, self.points)
             # Draw walls
@@ -274,17 +260,22 @@ class RacingEnv(gym.Env):
 
     def collisionBegin(self, arbiter, space, data):
         # If this is the first time the car has collided with this waypoint segment,
-        if arbiter.is_first_contact:
+        # if arbiter.is_first_contact:
             # Use the waypoint segment's index to determine which waypoint the car has passed through
-            waypoint_index = self.waypoint_segments.index(arbiter.shapes[1])
+        waypoint_index = self.waypoint_segments.index(arbiter.shapes[1])
 
-            print("Collision with waypoint segment", waypoint_index)
-            print(arbiter.shapes[0], arbiter.shapes[1])
+        print("Collision with waypoint segment", waypoint_index)
+
+        if waypoint_index > self.state['current_waypoint']:
+            self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoint'])
+            self.state['current_waypoint'] = waypoint_index
+            self.state['next_waypoint'] = waypoint_index + 1
+            # print(arbiter.shapes[0], arbiter.shapes[1])
         return True
     
     def collisionSeparate(self, arbiter, space, data):
         waypoint_index = self.waypoint_segments.index(arbiter.shapes[1])
-        print("Separation with waypoint segment", waypoint_index)
+        # print("Separation with waypoint segment", waypoint_index)
         return True
 
 ### Environment Functions ###
