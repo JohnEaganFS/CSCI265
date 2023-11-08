@@ -76,7 +76,7 @@ def getNewSpeed(speed, throttle, speed_limit):
 ### Global Variables ###
 # Model parameters
 max_steps = 1000
-total_timesteps = 10000
+total_timesteps = 300000
 observation_size = 50
 
 # Pygame parameters
@@ -123,6 +123,7 @@ class RacingEnv(gym.Env):
         self.observation_size = observation_size
         self.max_steps = max_steps
         self.waypoint_reward = 0
+        self.collision_penalty = 0
         # self.reward_range = (-np.inf, np.inf)
 
         # Add the car to the space
@@ -160,6 +161,7 @@ class RacingEnv(gym.Env):
         # Add collision handler for car and walls
         self.collision_handler = self.space.add_collision_handler(1, 0)
         self.collision_handler.begin = self.collisionBeginWalls
+        self.collision_handler.separate = self.collisionSeparateWalls
 
         # Initialize state
         self.state = {
@@ -178,50 +180,22 @@ class RacingEnv(gym.Env):
         self.screen.fill((0, 0, 0))
         draw_waypoints(self.screen, self.points, self.state['current_waypoint'], self.state['next_waypoint'])
         draw_walls(self.screen, self.walls)
-        # arrow_length = 10
-        # arrow_angle = self.state['heading']
-        # arrow_x = car_pos[0] + arrow_length*np.cos(arrow_angle)
-        # arrow_y = car_pos[1] + arrow_length*np.sin(arrow_angle)
-        # pygame.draw.line(self.screen, (255, 255, 0), car_pos, (arrow_x, arrow_y))
         pygame.display.flip()
 
     def observation(self):
-        # total_start = time.time()
         # Get car position
         car_pos = self.car.position
 
         # Draw the new car position
         pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 1)
-        # arrow_length = 10
-        # arrow_angle = self.state['heading']
-        # arrow_x = car_pos[0] + arrow_length*np.cos(arrow_angle)
-        # arrow_y = car_pos[1] + arrow_length*np.sin(arrow_angle)
-        # pygame.draw.line(self.screen, (255, 255, 0), car_pos, (arrow_x, arrow_y))
 
         # Get observation (100x100 image around the car)
         # Define sub-surface
-        # define_surface_start = time.time()
         observation = pygame.Surface((self.observation_size, self.observation_size))
-        # define_surface_end = time.time()
-
-        # blit_start = time.time()
         observation.blit(self.screen, (0, 0), (car_pos[0] - self.observation_size/2, car_pos[1] - self.observation_size/2, self.observation_size, self.observation_size))
-        # blit_end = time.time()
-
-        # surf_start = time.time()
         observation = pygame.surfarray.pixels3d(observation)
-        # surf_end = time.time()
-        # observation = observation.astype(np.uint8)
-
-        # total_end = time.time()
-
-        # print("Total time to get observation:", total_end - total_start)
-        # print("Time Percentage to define surface:", (define_surface_end - define_surface_start)/(total_end - total_start))
-        # print("Time Percentage to blit:", (blit_end - blit_start)/(total_end - total_start))
-        # print("Time Percentage to surf:", (surf_end - surf_start)/(total_end - total_start))
 
         return observation
-
 
     def reset(self):
         self.car.position = self.points[0][0], self.points[0][1]
@@ -237,40 +211,25 @@ class RacingEnv(gym.Env):
 
     def step(self, action):
         # Establish reward (penalty for living)
-        # start = time.time()
-        # action_start = time.time()
         reward = -0.01
         self.state['steps_since_last_waypoint'] += 1
 
         # Take action
         steer, throttle = action
 
-        # heading_start = time.time()
-
         # Get new heading
         new_heading = getNewHeading(self.state['heading'], steer)
         self.state['heading'] = new_heading
 
-        # heading_end = time.time()
-
-        # speed_start = time.time()
         # Get new speed
         new_speed = getNewSpeed(self.state['speed'], throttle, self.speed_limit)
         self.state['speed'] = new_speed
-        # speed_end = time.time()
 
-        # velocity_start = time.time()
         # Update car velocity
         self.car.velocity = (self.state['speed']*np.cos(self.state['heading']), self.state['speed']*np.sin(self.state['heading']))
 
-        # velocity_end = time.time()
-
-        # action_end = time.time()
-
         # Update space
-        # space_update_start = time.time()
         self.space.step(1/FPS)
-        # space_update_end = time.time()
         # pygame.display.flip()
 
         # Update state
@@ -284,7 +243,7 @@ class RacingEnv(gym.Env):
         self.waypoint_reward = 0
 
         # Check for wall collision penalty
-        # TODO
+        reward += self.collision_penalty
 
         # Check for done
         done = any([
@@ -296,17 +255,7 @@ class RacingEnv(gym.Env):
             self.state['steps_since_last_waypoint'] > 500
         ])
 
-        # start_obs  = time.time()
         observation = self.observation()
-        # end_obs = time.time()
-        # end = time.time()
-        # print("Time to step:", end - start)
-        # print("Time Percentage (obs):", (end_obs - start_obs)/(end - start))
-        # print("Time Percentage (space):", (space_update_end - space_update_start)/(end - start))
-        # print("Time Percentage (action):", (action_end - action_start)/(end - start))
-        # print("Time Percentage (heading):", (heading_end - heading_start)/(end - start))
-        # print("Time Percentage (speed):", (speed_end - speed_start)/(end - start))
-        # print("Time Percentage (velocity):", (velocity_end - velocity_start)/(end - start))
 
         # Return observation, reward, done, info
         return observation, reward, done, {}
@@ -379,8 +328,13 @@ class RacingEnv(gym.Env):
     def collisionBeginWalls(self, arbiter, space, data):
         # print("Collision with wall!")
         # Remove speed from the car
-        self.state['speed'] *= 0.5
+        self.state['speed'] = 0
         # Add reward penalty later
+        self.collision_penalty = -0.1
+        return True
+
+    def collisionSeparateWalls(self, arbiter, space, data):
+        self.collision_penalty = 0
         return True
 
 ### Environment Functions ###
