@@ -20,7 +20,7 @@ import pickle
 
 # Custom (other scripts)
 from read_gpx import read_gpx, removeDuplicatePoints, scaleData
-from CustomRacing2D_env import draw_waypoints
+from CustomRacing2D_env import draw_waypoints, getNewHeading
 
 ### Misc. Functions ###
 def initialize_pygame(width, height):
@@ -35,6 +35,20 @@ def draw_walls(screen, pl_set):
     for pl in pl_set:
         # Draw filled polygon (each pl is a list of points)
         pygame.draw.polygon(screen, (255, 0, 0), pl)
+
+def getNewSpeed(speed, throttle, speed_limit):
+    force = throttle
+
+    force += np.random.normal(0, 0.05)
+
+    new_speed = speed + force
+
+    if new_speed > speed_limit:
+        new_speed = speed_limit
+    elif new_speed < 0:
+        new_speed = 0
+    
+    return new_speed
 
 ### Global Variables ###
 # Model parameters
@@ -73,7 +87,8 @@ class RacingEnv(gym.Env):
     def __init__(self, map):
         # Load map data
         with open(map, 'rb') as f:
-            self.space, self.points, self.boundaries, self.screen_size, self.walls = pickle.load(f)
+            self.static_space, self.points, self.boundaries, self.screen_size, self.walls = pickle.load(f)
+            self.points = self.points[1:]
 
         # Initialize pygame
         self.screen, self.clock = initialize_pygame(self.screen_size[0], self.screen_size[1])
@@ -85,14 +100,38 @@ class RacingEnv(gym.Env):
 
         self.render()
 
+
+
     def observation(self):
+        # Get observation (100x100 image around the car)
         pass
 
     def reset(self):
-        pass
+        # Reset environment
+        space = self.static_space
+        # Add the car   
+        car = pymunk.Body(10, 1, body_type=pymunk.Body.DYNAMIC)
+        car.position = (self.points[0][0], self.points[0][1])
+        car_shape = pymunk.Circle(car, 2)
+        car_shape.elasticity = 1
+        space.add(car, car_shape)
+        
 
-    def step(self):
-        pass
+        self.state = {
+            'heading': np.random.uniform(-np.pi, np.pi)
+        }
+
+        self.speed_limit = 200
+
+    def step(self, action):
+        # Take action
+        steer, throttle = action
+
+        # Get new heading
+        new_heading = getNewHeading(self.state['heading'], steer)
+        self.state['heading'] = new_heading
+        # Get new speed
+
 
     def render(self):
 
@@ -123,8 +162,6 @@ if __name__ == "__main__":
 
     # Initialize environment
     env = RacingEnv("../maps/map_10_30_800_800.pkl")
-
-    # Load map
 
 
 
