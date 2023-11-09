@@ -315,8 +315,8 @@ class RacingEnv(gym.Env):
         ]
         done = any(checks)
 
-        if (done):
-            print(checks)
+        # if (done):
+        #     print(checks)
 
         if checks[2] or checks[0]:
             reward -= max([10, 4 * self.state['current_waypoint']])
@@ -327,7 +327,6 @@ class RacingEnv(gym.Env):
 
         # Return observation, reward, done, info
         return observation, reward, done, {}
-
 
     def render(self):
         while True:
@@ -501,7 +500,7 @@ if __name__ == "__main__":
     eval_env = VecFrameStack(eval_env, n_stack=3)
 
     # Callbacks
-    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=5000, deterministic=True, render=False, verbose=1)
+    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=5000, deterministic=True, render=False, verbose=1, n_eval_episodes=10)
 
     # Train model
     model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True)
