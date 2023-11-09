@@ -21,4 +21,4 @@ if __name__ == "__main__":
     model = PPO.load("../models/temp_model")
 
     # Play episodes
-    playNEpisodes(5, env, model, max_steps)
+    playNEpisodes(10, env, model, max_steps)

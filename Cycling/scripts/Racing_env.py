@@ -89,7 +89,7 @@ def getNewSpeed(speed, throttle, speed_limit):
 ### Global Variables ###
 # Model parameters
 max_steps = 1000
-total_timesteps = 300000
+total_timesteps = 1000000
 observation_size = 64
 
 # Pygame parameters
@@ -192,6 +192,7 @@ class RacingEnv(gym.Env):
         self.screen.fill((0, 0, 0))
         draw_waypoints(self.screen, self.points, self.state['current_waypoint'], self.state['next_waypoint'])
         draw_walls(self.screen, self.walls)
+        draw_waypoint_segments(self.screen, self.points)
         # draw_test_waypoints(self.screen, self.draw_waypoint_segments)
         pygame.display.flip()
 
@@ -210,11 +211,11 @@ class RacingEnv(gym.Env):
         draw_waypoints(self.screen, self.points, self.state['current_waypoint'], self.state['next_waypoint'])
 
         # Draw arrow to show heading and speed
-        arrow_length = 20
-        arrow_angle = self.state['heading']
-        arrow_x = car_pos[0] + arrow_length*np.cos(arrow_angle)
-        arrow_y = car_pos[1] + arrow_length*np.sin(arrow_angle)
-        pygame.draw.line(self.screen, (255, 255, 0), car_pos, (arrow_x, arrow_y), width=4)
+        # arrow_length = 20
+        # arrow_angle = self.state['heading']
+        # arrow_x = car_pos[0] + arrow_length*np.cos(arrow_angle)
+        # arrow_y = car_pos[1] + arrow_length*np.sin(arrow_angle)
+        # pygame.draw.line(self.screen, (255, 255, 0), car_pos, (arrow_x, arrow_y), width=4)
         # Draw the new car position
         pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 5)
 
@@ -277,7 +278,8 @@ class RacingEnv(gym.Env):
 
         # Update space
         self.space.step(1/FPS)
-        pygame.display.flip()
+        # pygame.display.flip()
+        # self.clock.tick(FPS)
 
         # Update state
         self.state['position'] = self.car.position
@@ -378,7 +380,7 @@ class RacingEnv(gym.Env):
     def collisionBeginWalls(self, arbiter, space, data):
         # If first time step, ignore collision
         if self.steps_left == self.max_steps:
-            return True
+            return False
         self.collision_penalty = -10
         return True
 
@@ -448,7 +450,6 @@ class CustomCNN(BaseFeaturesExtractor):
 
 ### Main ###
 if __name__ == "__main__":
-
     # Initialize environment
     env = RacingEnv("../maps/map_10_30_800_800.pkl")
 
@@ -465,7 +466,8 @@ if __name__ == "__main__":
     )
 
     # Create model
-    model = PPO("CnnPolicy", vec_env, verbose=1, n_epochs=5)
+    # model = PPO("CnnPolicy", vec_env, verbose=1, device="cpu")
+    model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda")
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Train model
@@ -479,8 +481,8 @@ if __name__ == "__main__":
     print(f'Mean reward: {mean_reward} +/- {std_reward}')
 
     # Render n episodes
-    env.reset()
-    playNEpisodes(5, env, model, max_steps)
+    vec_env.reset()
+    playNEpisodes(5, vec_env, model, max_steps)
 
 
     print("Hello, world!")
