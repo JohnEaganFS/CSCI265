@@ -126,8 +126,9 @@ class RacingEnv(gym.Env):
         # Save maps
         self.maps = maps
         self.max_steps = max_steps
+        self.current_map = maps[0]
 
-        self.reset()
+        self.setup(self.current_map, self.max_steps)
 
     def setup(self, map, max_steps):
         # Load map data
@@ -138,9 +139,6 @@ class RacingEnv(gym.Env):
             # Set all shapes in space to have collision type 3
             for shape in self.space.shapes:
                 shape.collision_type = 3
-                # If one of the walls has a weirdly large area, remove it
-                if shape.area > 10000:
-                    self.space.remove(shape)
 
         # Initialize pygame
         self.screen, self.clock = initialize_pygame(self.screen_size[0], self.screen_size[1])
@@ -176,7 +174,6 @@ class RacingEnv(gym.Env):
             self.draw_waypoint_segments.append((p1, p2, p3, p4))
             self.space.add(poly)
 
-
         # Add collision handler for car and waypoint segments
         self.collision_handler = self.space.add_collision_handler(1, 2)
         self.collision_handler.begin = self.collisionBegin
@@ -186,6 +183,7 @@ class RacingEnv(gym.Env):
         self.collision_handler_walls = self.space.add_collision_handler(1, 3)
         self.collision_handler_walls.begin = self.collisionBeginWalls
         self.collision_handler_walls.separate = self.collisionSeparateWalls
+        self.collision_handler_walls.post_solve = self.collisionBeginWalls
 
         # Initialize state
         self.state = {
@@ -194,7 +192,8 @@ class RacingEnv(gym.Env):
             'speed': 0,
             'current_waypoint': 0,
             'next_waypoint': 1,
-            'steps_since_last_waypoint': 0
+            'steps_since_last_waypoint': 0,
+            'in_waypoints': [False for i in range(len(self.points) - 1)]
         }
 
         self.car.velocity = (self.state['speed']*np.cos(self.state['heading']), self.state['speed']*np.sin(self.state['heading']))
@@ -215,19 +214,13 @@ class RacingEnv(gym.Env):
         self.screen.fill((0, 0, 0))
 
         # Redraw the walls
+        # draw_test_waypoints(self.screen, self.draw_waypoint_segments)
         draw_walls(self.screen, self.walls)
         # Draw waypoint segments
         draw_waypoint_segments(self.screen, self.points)
         # Redraw the waypoints
         draw_waypoints(self.screen, self.points, self.state['current_waypoint'], self.state['next_waypoint'])
-
-        # Draw arrow to show heading and speed
-        # arrow_length = 20
-        # arrow_angle = self.state['heading']
-        # arrow_x = car_pos[0] + arrow_length*np.cos(arrow_angle)
-        # arrow_y = car_pos[1] + arrow_length*np.sin(arrow_angle)
-        # pygame.draw.line(self.screen, (255, 255, 0), car_pos, (arrow_x, arrow_y), width=4)
-        # Draw the new car position
+        # Draw car
         pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 5)
 
 
@@ -256,12 +249,13 @@ class RacingEnv(gym.Env):
     def reset(self):
         maps = self.maps
         max_steps = self.max_steps
+        current_map = self.current_map
         # Clear all self variables (except maps)
         self.__dict__.clear()
         self.maps = maps
         self.max_steps = max_steps
+        self.current_map = current_map
 
-        # Pick a new map
         map = np.random.choice(self.maps)
         self.setup(map, self.max_steps)
         self.car.velocity = (self.state['speed']*np.cos(self.state['heading']), self.state['speed']*np.sin(self.state['heading']))
@@ -385,6 +379,7 @@ class RacingEnv(gym.Env):
         waypoint_index = self.waypoint_segments.index(arbiter.shapes[1])
 
         # print("Collision with waypoint segment", waypoint_index)
+        self.state['in_waypoints'][waypoint_index] = True
 
         if waypoint_index > self.state['current_waypoint']:
             self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoint'])
@@ -396,12 +391,18 @@ class RacingEnv(gym.Env):
     
     def collisionSeparate(self, arbiter, space, data):
         # print("Separation with waypoint segment", waypoint_index)
+        if not(hasattr(self, 'waypoint_segments')):
+            return True
+        elif arbiter.shapes[1] not in self.waypoint_segments:
+            return True
+        waypoint_index = self.waypoint_segments.index(arbiter.shapes[1])
+        self.state['in_waypoints'][waypoint_index] = False
         return True
 
     def collisionBeginWalls(self, arbiter, space, data):
-        # If first time step, ignore collision
-        if self.steps_left == self.max_steps:
-            return False
+        # If first time step or in waypoint, ignore collision
+        if self.steps_left == self.max_steps or any(self.state['in_waypoints']):
+            return True
 
         num_waypoints_passed = self.state['current_waypoint']
         self.collision_penalty = min([-10, -4 * num_waypoints_passed])
@@ -473,7 +474,7 @@ class CustomCNN(BaseFeaturesExtractor):
 
 ### Main ###
 if __name__ == "__main__":
-    maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl"]
+    maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
     # Initialize environment
     env = RacingEnv(maps, max_steps)
 

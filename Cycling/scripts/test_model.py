@@ -12,8 +12,10 @@ from stable_baselines3.common.vec_env import VecFrameStack
 max_steps = 5000
 
 if __name__ == "__main__":
+    maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
+    # maps = ["../maps/map_10_30_800_800.pkl"]
     # Create environment
-    env = RacingEnv(["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl"], max_steps)
+    env = RacingEnv(maps, max_steps)
     env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
     env = VecFrameStack(env, n_stack=3)
 

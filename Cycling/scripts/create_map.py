@@ -139,6 +139,7 @@ if __name__ == "__main__":
     # Define boundaries with bigger track width
     boundary_points_big = define_boundaries(waypoints_with_added_points, track_width + 50)
     boundary_points_bigger = define_boundaries(waypoints_with_added_points, track_width + 100)
+    boundary_points_inset = define_boundaries(waypoints_with_added_points, track_width - 10)
 
     # Initialize pygame
     screen, clock = pygame_init()
@@ -225,7 +226,8 @@ if __name__ == "__main__":
             # Save the pymunk static space with pickle (filename should be map_{start, start+amount}_{screen_width}_{screen_height}.pkl)
             with open("../maps/map_" + str(start) + "_" + str(start + amount) + "_" + str(SCREEN_WIDTH) + "_" + str(SCREEN_HEIGHT) + ".pkl", "wb") as f:
                 # Also save the waypoints and boundary points and screen width and height and the pl_set
-                pickle.dump((space_static, waypoints, boundary_points, (SCREEN_WIDTH, SCREEN_HEIGHT), pl_copy), f)
+                # pickle.dump((space_static, waypoints, boundary_points, (SCREEN_WIDTH, SCREEN_HEIGHT), pl_copy), f)
+                pickle.dump((space_static, waypoints, boundary_points_inset, (SCREEN_WIDTH, SCREEN_HEIGHT), pl_copy), f)
 
         # Draw ball
         screen.fill((0, 0, 0))
