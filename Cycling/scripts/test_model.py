@@ -1,4 +1,4 @@
-from Racing_env import RacingEnv, playNEpisodes
+from RacingMaps_env import RacingEnv, playNEpisodes
 
 # Standard
 import numpy as np
@@ -13,7 +13,7 @@ max_steps = 5000
 
 if __name__ == "__main__":
     # Create environment
-    env = RacingEnv("../maps/map_10_30_800_800.pkl", max_steps)
+    env = RacingEnv(["../maps/map_10_30_800_800.pkl"], max_steps)
     env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
     env = VecFrameStack(env, n_stack=3)
 

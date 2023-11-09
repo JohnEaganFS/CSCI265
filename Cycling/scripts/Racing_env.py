@@ -484,7 +484,7 @@ if __name__ == "__main__":
     eval_env = VecFrameStack(eval_env, n_stack=3)
 
     # Callbacks
-    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=2048, deterministic=True, render=False, verbose=1)
+    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=5000, deterministic=True, render=False, verbose=1)
 
     # Train model
     model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True)
