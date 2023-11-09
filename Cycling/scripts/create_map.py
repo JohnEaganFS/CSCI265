@@ -21,7 +21,7 @@ SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 800
 
 # Waypoint stuff
-start, amount = 30, 20
+start, amount = 70, 20
 add_points_iterations = 5
 total_waypoints = 50
 track_width = 60

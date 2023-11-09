@@ -122,7 +122,7 @@ def defineActionSpace():
 
 ### Environment ###
 class RacingEnv(gym.Env):
-    def __init__(self, maps, max_steps=max_steps):
+    def __init__(self, maps, max_steps):
         # Save maps
         self.maps = maps
         self.max_steps = max_steps
@@ -135,6 +135,12 @@ class RacingEnv(gym.Env):
             self.space, self.points, self.boundaries, self.screen_size, self.walls = pickle.load(f)
             self.points = self.points[1:len(self.points) - 1]
             self.boundaries = self.boundaries[1:len(self.boundaries) - 1]
+            # Set all shapes in space to have collision type 3
+            for shape in self.space.shapes:
+                shape.collision_type = 3
+                # If one of the walls has a weirdly large area, remove it
+                if shape.area > 10000:
+                    self.space.remove(shape)
 
         # Initialize pygame
         self.screen, self.clock = initialize_pygame(self.screen_size[0], self.screen_size[1])
@@ -177,7 +183,7 @@ class RacingEnv(gym.Env):
         self.collision_handler.separate = self.collisionSeparate
 
         # Add collision handler for car and walls
-        self.collision_handler_walls = self.space.add_collision_handler(1, 0)
+        self.collision_handler_walls = self.space.add_collision_handler(1, 3)
         self.collision_handler_walls.begin = self.collisionBeginWalls
         self.collision_handler_walls.separate = self.collisionSeparateWalls
 
@@ -376,9 +382,6 @@ class RacingEnv(gym.Env):
         # If this is the first time the car has collided with this waypoint segment,
         # if arbiter.is_first_contact:
         # Use the waypoint segment's index to determine which waypoint the car has passed through
-        if arbiter.shapes[1] not in self.waypoint_segments:
-            print(arbiter.shapes[0], arbiter.shapes[1])
-            print(self.waypoint_segments)
         waypoint_index = self.waypoint_segments.index(arbiter.shapes[1])
 
         # print("Collision with waypoint segment", waypoint_index)
@@ -392,7 +395,6 @@ class RacingEnv(gym.Env):
         return True
     
     def collisionSeparate(self, arbiter, space, data):
-        waypoint_index = self.waypoint_segments.index(arbiter.shapes[1])
         # print("Separation with waypoint segment", waypoint_index)
         return True
 
@@ -400,7 +402,7 @@ class RacingEnv(gym.Env):
         # If first time step, ignore collision
         if self.steps_left == self.max_steps:
             return False
-        # Make the penalty equal to the reward gained from passing all the previous waypoints
+
         num_waypoints_passed = self.state['current_waypoint']
         self.collision_penalty = min([-10, -4 * num_waypoints_passed])
         return True
@@ -471,8 +473,9 @@ class CustomCNN(BaseFeaturesExtractor):
 
 ### Main ###
 if __name__ == "__main__":
+    maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl"]
     # Initialize environment
-    env = RacingEnv(["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl"], max_steps)
+    env = RacingEnv(maps, max_steps)
 
     # Parallelize environment
     vec_env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
@@ -492,7 +495,7 @@ if __name__ == "__main__":
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback env
-    eval_env = RacingEnv(["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl"], max_steps)
+    eval_env = RacingEnv(maps, max_steps)
     eval_env = make_vec_env(lambda: eval_env, n_envs=1, seed=np.random.randint(0, 10000))
     eval_env = VecFrameStack(eval_env, n_stack=3)
 
