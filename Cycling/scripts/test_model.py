@@ -21,7 +21,8 @@ if __name__ == "__main__":
 
     # Load agent model
     # model = PPO.load("../models/temp_model")
-    model = PPO.load("../eval_models/best_model.zip")
+    # model = PPO.load("../eval_models/best_model.zip")
+    model = PPO.load("../eval_models/actually_the_best.zip")
 
 
     # Play episodes
