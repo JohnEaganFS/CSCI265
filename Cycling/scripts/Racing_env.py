@@ -121,26 +121,25 @@ def defineActionSpace():
 
 ### Environment ###
 class RacingEnv(gym.Env):
-    def __init__(self, map):
+    def __init__(self, map, max_steps=max_steps):
         # Load map data
         with open(map, 'rb') as f:
             self.space, self.points, self.boundaries, self.screen_size, self.walls = pickle.load(f)
-            self.points = self.points[1:]
-            self.boundaries = self.boundaries[1:]
+            self.points = self.points[1:len(self.points) - 1]
+            self.boundaries = self.boundaries[1:len(self.boundaries) - 1]
+            # Set all shapes in the space to have collision type 3
+            self.space.shapes[0].collision_type = 3
 
         # Initialize pygame
         self.screen, self.clock = initialize_pygame(self.screen_size[0], self.screen_size[1])
     
         # Initialize environment variables
         self.observation_space = defineObservationSpace()
-        print(isinstance(self.observation_space, (spaces.Box, spaces.Dict)))
-
         self.action_space = defineActionSpace()
         self.observation_size = observation_size
         self.max_steps = max_steps
         self.waypoint_reward = 0
         self.collision_penalty = 0
-        self.previous_car_pos = (self.points[0][0], self.points[0][1])
         # self.reward_range = (-np.inf, np.inf)
 
         # Add the car to the space
@@ -248,7 +247,6 @@ class RacingEnv(gym.Env):
         self.collision_penalty = 0
         # Clear the screen
         self.screen.fill((0, 0, 0))
-        self.previous_car_pos = (self.points[0][0], self.points[0][1])
     
         self.state = self.initial_state.copy()
         self.car.velocity = (self.state['speed']*np.cos(self.state['heading']), self.state['speed']*np.sin(self.state['heading']))
@@ -282,7 +280,6 @@ class RacingEnv(gym.Env):
         pygame.display.flip()
 
         # Update state
-        self.previous_car_pos = self.state['position']
         self.state['position'] = self.car.position
 
         # Update steps left
@@ -296,16 +293,17 @@ class RacingEnv(gym.Env):
         reward += self.collision_penalty
 
         # Check for done
-        done = any([
+        checks = [
             # Run out of steps
             self.steps_left <= 0,
             # Reached the end of the waypoints
-            self.state['current_waypoint'] == len(self.points) - 1,
+            self.state['current_waypoint'] == len(self.points) - 2,
             # Haven't passed through a waypoint in a while
             self.state['steps_since_last_waypoint'] > 500,
             # Collision with wall
             self.collision_penalty < 0
-        ])
+        ]
+        done = any(checks)
 
         observation = self.observation()
 
@@ -378,10 +376,9 @@ class RacingEnv(gym.Env):
         return True
 
     def collisionBeginWalls(self, arbiter, space, data):
-        # print("Collision with wall!")
-        # Remove speed from the car
-        # self.state['speed'] = 0
-        # # Add reward penalty later
+        # If first time step, ignore collision
+        if self.steps_left == self.max_steps:
+            return True
         self.collision_penalty = -10
         return True
 
@@ -403,12 +400,14 @@ def create_car(pos):
     return car, car_shape
 
 ### Display Episodes in PyGame ###
-def playNEpisodes(n, env, model):
+def playNEpisodes(n, env, model, max_steps=1000):
     for episode in range(n):
         obs = env.reset()
         for step in range(max_steps):
             action, _states = model.predict(obs.copy(), deterministic=True)
+            # print("Action:", action)
             obs, reward, done, info = env.step(action)
+
             pygame.display.update()
             if done:
                 print(f'Episode {episode} finished after {step} steps')
@@ -480,8 +479,8 @@ if __name__ == "__main__":
     print(f'Mean reward: {mean_reward} +/- {std_reward}')
 
     # Render n episodes
-    env = RacingEnv("../maps/map_10_30_800_800.pkl")
-    playNEpisodes(5, env, model)
+    env.reset()
+    playNEpisodes(5, env, model, max_steps)
 
 
     print("Hello, world!")
