@@ -20,6 +20,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env import VecFrameStack
+from stable_baselines3.common.callbacks import EvalCallback, ProgressBarCallback
 
 # Simulation (pygame, pymunk)
 import pygame
@@ -88,7 +89,7 @@ def getNewSpeed(speed, throttle, speed_limit):
 
 ### Global Variables ###
 # Model parameters
-max_steps = 1000
+max_steps = 5000
 total_timesteps = 1000000
 observation_size = 64
 
@@ -307,6 +308,11 @@ class RacingEnv(gym.Env):
         ]
         done = any(checks)
 
+        if checks[2] or checks[0]:
+            reward -= max([10, 4 * self.state['current_waypoint']])
+        elif checks[1]:
+            reward += 100
+
         observation = self.observation()
 
         # Return observation, reward, done, info
@@ -381,7 +387,9 @@ class RacingEnv(gym.Env):
         # If first time step, ignore collision
         if self.steps_left == self.max_steps:
             return False
-        self.collision_penalty = -10
+        # Make the penalty equal to the reward gained from passing all the previous waypoints
+        num_waypoints_passed = self.state['current_waypoint']
+        self.collision_penalty = min([-10, -4 * num_waypoints_passed])
         return True
 
     def collisionSeparateWalls(self, arbiter, space, data):
@@ -470,8 +478,16 @@ if __name__ == "__main__":
     model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda")
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
+    # Callback env
+    eval_env = RacingEnv("../maps/map_10_30_800_800.pkl")
+    eval_env = make_vec_env(lambda: eval_env, n_envs=1, seed=np.random.randint(0, 10000))
+    eval_env = VecFrameStack(eval_env, n_stack=3)
+
+    # Callbacks
+    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=2048, deterministic=True, render=False, verbose=1)
+
     # Train model
-    model.learn(total_timesteps=total_timesteps)
+    model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True)
 
     # Save model
     model.save('../models/temp_model')

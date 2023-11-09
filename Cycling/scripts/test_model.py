@@ -18,7 +18,9 @@ if __name__ == "__main__":
     env = VecFrameStack(env, n_stack=3)
 
     # Load agent model
-    model = PPO.load("../models/temp_model")
+    # model = PPO.load("../models/temp_model")
+    model = PPO.load("../eval_models/best_model.zip")
+
 
     # Play episodes
     playNEpisodes(10, env, model, max_steps)
