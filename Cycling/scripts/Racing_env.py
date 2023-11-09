@@ -12,12 +12,14 @@ import torch.nn as nn
 
 # Gym
 import gym
+from gym import spaces
 
 # SB3
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from stable_baselines3.common.vec_env import VecFrameStack
 
 # Simulation (pygame, pymunk)
 import pygame
@@ -45,7 +47,7 @@ def draw_walls(screen, pl_set):
 
 def draw_waypoint_segments(screen, points):
     for i in range(len(points) - 1):
-        pygame.draw.line(screen, (0, 0, 255), points[i], points[i + 1])
+        pygame.draw.line(screen, (255, 255, 255), points[i], points[i + 1], 2)
 
 def draw_test_waypoints(screen, points):
     for p1, p2, p3, p4 in points:
@@ -79,8 +81,8 @@ def getNewSpeed(speed, throttle, speed_limit):
 
     if new_speed > speed_limit:
         new_speed = speed_limit
-    elif new_speed < 0:
-        new_speed = 0
+    elif new_speed < 30:
+        new_speed = 30
     
     return new_speed
 
@@ -131,6 +133,8 @@ class RacingEnv(gym.Env):
     
         # Initialize environment variables
         self.observation_space = defineObservationSpace()
+        print(isinstance(self.observation_space, (spaces.Box, spaces.Dict)))
+
         self.action_space = defineActionSpace()
         self.observation_size = observation_size
         self.max_steps = max_steps
@@ -196,25 +200,45 @@ class RacingEnv(gym.Env):
         # Get car position
         car_pos = self.car.position
 
-        # Clear the previous car position
-        # pygame.draw.rect(self.screen, (0, 0, 0), (int(self.previous_car_pos[0]), int(self.previous_car_pos[1]), 6, 6))
+        # Clear the screen
+        self.screen.fill((0, 0, 0))
 
         # Redraw the walls
         draw_walls(self.screen, self.walls)
+        # Draw waypoint segments
+        draw_waypoint_segments(self.screen, self.points)
         # Redraw the waypoints
         draw_waypoints(self.screen, self.points, self.state['current_waypoint'], self.state['next_waypoint'])
 
+        # Draw arrow to show heading and speed
+        arrow_length = 20
+        arrow_angle = self.state['heading']
+        arrow_x = car_pos[0] + arrow_length*np.cos(arrow_angle)
+        arrow_y = car_pos[1] + arrow_length*np.sin(arrow_angle)
+        pygame.draw.line(self.screen, (255, 255, 0), car_pos, (arrow_x, arrow_y), width=4)
         # Draw the new car position
-        pygame.draw.rect(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1]), 5, 5))
+        pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 5)
+
 
         # Get observation (100x100 image around the car)
         # Define sub-surface
         observation = pygame.Surface((self.observation_size, self.observation_size))
-        observation.blit(self.screen, (0, 0), (car_pos[0] - self.observation_size/2, car_pos[1] - self.observation_size/2, self.observation_size, self.observation_size))
+        observation.blit(self.screen, (0, 0), (car_pos[0] - self.observation_size / 2, car_pos[1] - self.observation_size / 2, self.observation_size, self.observation_size))
+        # Rotate the surface according to the heading
+        observation = pygame.transform.rotate(observation, self.state['heading'] * 180 / np.pi)
+        # Resize the surface back to 100x100
+        observation = pygame.transform.scale(observation, (self.observation_size, self.observation_size))
+        # Flip the surface vertically
+        observation = pygame.transform.flip(observation, True, False)
         observation = pygame.surfarray.pixels3d(observation)
+
+        # plt.imshow(observation)
+        # plt.show()
+        # exit()
 
         # Convert to CxHxW
         observation = np.transpose(observation, (2, 0, 1))
+
 
         return observation
 
@@ -270,7 +294,6 @@ class RacingEnv(gym.Env):
 
         # Check for wall collision penalty
         reward += self.collision_penalty
-        self.collision_penalty = 0
 
         # Check for done
         done = any([
@@ -279,7 +302,9 @@ class RacingEnv(gym.Env):
             # Reached the end of the waypoints
             self.state['current_waypoint'] == len(self.points) - 1,
             # Haven't passed through a waypoint in a while
-            self.state['steps_since_last_waypoint'] > 500
+            self.state['steps_since_last_waypoint'] > 500,
+            # Collision with wall
+            self.collision_penalty < 0
         ])
 
         observation = self.observation()
@@ -355,9 +380,9 @@ class RacingEnv(gym.Env):
     def collisionBeginWalls(self, arbiter, space, data):
         # print("Collision with wall!")
         # Remove speed from the car
-        self.state['speed'] = 0
-        # Add reward penalty later
-        self.collision_penalty = -1
+        # self.state['speed'] = 0
+        # # Add reward penalty later
+        self.collision_penalty = -10
         return True
 
     def collisionSeparateWalls(self, arbiter, space, data):
@@ -429,7 +454,10 @@ if __name__ == "__main__":
     env = RacingEnv("../maps/map_10_30_800_800.pkl")
 
     # Parallelize environment
-    # vec_env = make_vec_env(lambda: env, n_envs=8)
+    vec_env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
+
+    # Frame stack
+    vec_env = VecFrameStack(vec_env, n_stack=3)
 
     # Policy Args
     policy_kwargs = dict(
@@ -438,7 +466,8 @@ if __name__ == "__main__":
     )
 
     # Create model
-    model = PPO("CnnPolicy", env, verbose=1, policy_kwargs=policy_kwargs)
+    model = PPO("CnnPolicy", vec_env, verbose=1, n_epochs=5)
+    # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Train model
     model.learn(total_timesteps=total_timesteps)

@@ -546,7 +546,7 @@ def draw_waypoints(screen, waypoints, current_waypoint, next_waypoint):
     for i, waypoint in enumerate(waypoints):
         # Make the current waypoint red
         if i == current_waypoint:
-            color = (255, 0, 0)
+            color = (0, 0, 255)
         # Make the next waypoint green
         elif i == next_waypoint:
             color = (0, 255, 0)
@@ -556,7 +556,7 @@ def draw_waypoints(screen, waypoints, current_waypoint, next_waypoint):
         # Make future waypoints white
         else:
             color = (255, 255, 255)
-        pygame.draw.circle(screen, color, (int(waypoint[0]), int(waypoint[1])), 2)
+        pygame.draw.circle(screen, color, (int(waypoint[0]), int(waypoint[1])), 4)
 
 def draw_timestep(screen, state_history):
     # Write timestep to screen
