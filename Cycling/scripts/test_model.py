@@ -12,8 +12,8 @@ from stable_baselines3.common.vec_env import VecFrameStack
 max_steps = 5000
 
 if __name__ == "__main__":
-    maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
-    # maps = ["../maps/map_10_30_800_800.pkl"]
+    # maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
+    maps = ["../maps/map_10_30_800_800.pkl"]
     # Create environment
     env = RacingEnv(maps, max_steps)
     env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
@@ -22,7 +22,8 @@ if __name__ == "__main__":
     # Load agent model
     # model = PPO.load("../models/temp_model")
     # model = PPO.load("../eval_models/best_model.zip")
-    model = PPO.load("../eval_models/actually_the_best.zip", env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
+    # model = PPO.load("../eval_models/actually_the_best.zip", env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
+    model = PPO.load("../eval_models/best_model.zip", env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
 
 
     # Play episodes

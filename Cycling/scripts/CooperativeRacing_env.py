@@ -198,7 +198,8 @@ class RacingEnv(gym.Env):
             'current_waypoints': [0 for i in range(2)],
             'next_waypoints': [1 for i in range(2)],
             'steps_since_last_waypoints': [0 for i in range(2)],
-            'in_waypoints': [[False for i in range(len(self.points) - 1)] for j in range(2)]
+            'in_waypoints': [[False for i in range(len(self.points) - 1)] for j in range(2)],
+            'previous_two_observations': [np.zeros((3, self.observation_size, self.observation_size)) for i in range(2)]
         }
 
         for car in self.cars:
@@ -206,7 +207,7 @@ class RacingEnv(gym.Env):
 
         # Draw the initial state
         self.screen.fill((0, 0, 0))
-        draw_waypoints(self.screen, self.points, self.state['current_waypoints'][0], self.state['next_waypoint'][0])
+        draw_waypoints(self.screen, self.points, self.state['current_waypoints'][0], self.state['next_waypoints'][0])
         draw_walls(self.screen, self.walls)
         draw_waypoint_segments(self.screen, self.points)
         # draw_test_waypoints(self.screen, self.draw_waypoint_segments)
@@ -258,11 +259,13 @@ class RacingEnv(gym.Env):
         maps = self.maps
         max_steps = self.max_steps
         current_map = self.current_map
+        other_agent = self.other_agent
         # Clear all self variables (except maps)
         self.__dict__.clear()
         self.maps = maps
         self.max_steps = max_steps
         self.current_map = current_map
+        self.other_agent = other_agent
 
         map = np.random.choice(self.maps)
         self.setup(map, self.max_steps)
@@ -282,8 +285,15 @@ class RacingEnv(gym.Env):
         for i, car in enumerate(self.cars):
             if i != 0:
                 # Get action from model
-                other_action, _states = model.predict(self.observation(i).copy(), deterministic=True)
+                current_obs = self.observation(i)
+                # Add previous two observations to current observation (to get 9 channels)
+                three_stack_obs = np.concatenate((current_obs, self.state['previous_two_observations'][0], self.state['previous_two_observations'][1]), axis=0)
+                other_action, _states = model.predict(three_stack_obs.copy(), deterministic=True)
                 steer, throttle = other_action
+
+                # Update previous two observations
+                self.state['previous_two_observations'][0] = self.state['previous_two_observations'][1]
+                self.state['previous_two_observations'][1] = current_obs
             else:
                 steer, throttle = action
             # Get new heading
@@ -307,12 +317,20 @@ class RacingEnv(gym.Env):
         # Update steps left
         self.steps_left -= 1
 
+        ### Reward Shaping ###
         # Check for reward gained from passing through waypoints
         reward += self.waypoint_reward
+        if self.waypoint_reward > 0:
+            # Penalize the agent for moving too far away from other agent (scale to)
+            distance = np.linalg.norm(self.cars[0].position - self.cars[1].position)
+            # If the distance is greater than 100, penalize the agent
+            if distance > 100:
+                reward = -1
         self.waypoint_reward = 0
 
         # Check for wall collision penalty
         reward += self.collision_penalty
+
 
         # Check for done
         checks = [
@@ -514,7 +532,7 @@ if __name__ == "__main__":
 
     # Create model
     # model = PPO("CnnPolicy", vec_env, verbose=1, device="cpu")
-    model = PPO.load('../eval_models/actually_the_best.zip', env=vec_env, device="cpu")
+    model = PPO.load('../eval_models/actually_the_best.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space})
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback env
