@@ -30,6 +30,7 @@ import pickle
 
 # Custom (other scripts)
 from read_gpx import read_gpx, removeDuplicatePoints, scaleData
+from RacingMaps_env import RacingEnv as RacingEnvMaps
 from CustomRacing2D_env import draw_waypoints
 
 ### Misc. Functions ###
@@ -122,11 +123,12 @@ def defineActionSpace():
 
 ### Environment ###
 class RacingEnv(gym.Env):
-    def __init__(self, maps, max_steps):
+    def __init__(self, maps, max_steps, model=None):
         # Save maps
         self.maps = maps
         self.max_steps = max_steps
         self.current_map = maps[0]
+        self.other_agent = model
 
         self.setup(self.current_map, self.max_steps)
 
@@ -148,13 +150,16 @@ class RacingEnv(gym.Env):
         self.action_space = defineActionSpace()
         self.observation_size = observation_size
         self.max_steps = max_steps
-        self.waypoint_reward = 0
-        self.collision_penalty = 0
+        self.waypoint_reward = 0 # XX
+        self.collision_penalty = 0 # XX
         # self.reward_range = (-np.inf, np.inf)
 
-        # Add the car to the space
-        self.car, self.car_shape = create_car(self.points[0])
-        self.space.add(self.car, self.car_shape)
+        # Add 2 cars to the space
+        self.cars = []
+        for i in range(2):
+            car, car_shape = create_car(self.points[0]) #CHANGE
+            self.cars.append(car)
+            self.space.add(car, car_shape)
 
         # Add the waypoint polys to the space (these should act like sensors that detect when the car passes through them)
         self.waypoint_segments = []
@@ -187,28 +192,29 @@ class RacingEnv(gym.Env):
 
         # Initialize state
         self.state = {
-            'position': self.points[0],
-            'heading': np.arctan2(self.points[1][1] - self.points[0][1], self.points[1][0] - self.points[0][0]),
-            'speed': 0,
-            'current_waypoint': 0,
-            'next_waypoint': 1,
-            'steps_since_last_waypoint': 0,
-            'in_waypoints': [False for i in range(len(self.points) - 1)]
+            'positions': [self.points[0] for i in range(2)],
+            'headings': [np.arctan2(self.points[1][1] - self.points[0][1], self.points[1][0] - self.points[0][0]) for i in range(2)],
+            'speeds': [0 for i in range(2)],
+            'current_waypoints': [0 for i in range(2)],
+            'next_waypoints': [1 for i in range(2)],
+            'steps_since_last_waypoints': [0 for i in range(2)],
+            'in_waypoints': [[False for i in range(len(self.points) - 1)] for j in range(2)]
         }
 
-        self.car.velocity = (self.state['speed']*np.cos(self.state['heading']), self.state['speed']*np.sin(self.state['heading']))
+        for car in self.cars:
+            car.velocity = (self.state['speeds'][0]*np.cos(self.state['headings'][0]), self.state['speeds'][0]*np.sin(self.state['headings'][0]))
 
         # Draw the initial state
         self.screen.fill((0, 0, 0))
-        draw_waypoints(self.screen, self.points, self.state['current_waypoint'], self.state['next_waypoint'])
+        draw_waypoints(self.screen, self.points, self.state['current_waypoints'][0], self.state['next_waypoint'][0])
         draw_walls(self.screen, self.walls)
         draw_waypoint_segments(self.screen, self.points)
         # draw_test_waypoints(self.screen, self.draw_waypoint_segments)
         pygame.display.flip()
 
-    def observation(self):
+    def observation(self, agent_id=0): # Make draw functions dependent on agent_id
         # Get car position
-        car_pos = self.car.position
+        car_pos = self.state['positions'][agent_id]
 
         # Clear the screen
         self.screen.fill((0, 0, 0))
@@ -219,17 +225,20 @@ class RacingEnv(gym.Env):
         # Draw waypoint segments
         draw_waypoint_segments(self.screen, self.points)
         # Redraw the waypoints
-        draw_waypoints(self.screen, self.points, self.state['current_waypoint'], self.state['next_waypoint'])
+        draw_waypoints(self.screen, self.points, self.state['current_waypoints'][agent_id], self.state['next_waypoints'][agent_id])
         # Draw car
         pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 5)
-
+        # Draw other car
+        for i, car in enumerate(self.cars):
+            if i != agent_id:
+                pygame.draw.circle(self.screen, (255, 0, 255), (int(car.position[0]), int(car.position[1])), 5)
 
         # Get observation (100x100 image around the car)
         # Define sub-surface
         observation = pygame.Surface((self.observation_size, self.observation_size))
         observation.blit(self.screen, (0, 0), (car_pos[0] - self.observation_size / 2, car_pos[1] - self.observation_size / 2, self.observation_size, self.observation_size))
         # Rotate the surface according to the heading
-        observation = pygame.transform.rotate(observation, self.state['heading'] * 180 / np.pi)
+        observation = pygame.transform.rotate(observation, self.state['headings'][agent_id] * 180 / np.pi)
         # Resize the surface back to 100x100
         observation = pygame.transform.scale(observation, (self.observation_size, self.observation_size))
         # Flip the surface vertically
@@ -242,7 +251,6 @@ class RacingEnv(gym.Env):
 
         # Convert to CxHxW
         observation = np.transpose(observation, (2, 0, 1))
-
 
         return observation
 
@@ -258,31 +266,34 @@ class RacingEnv(gym.Env):
 
         map = np.random.choice(self.maps)
         self.setup(map, self.max_steps)
-        self.car.velocity = (self.state['speed']*np.cos(self.state['heading']), self.state['speed']*np.sin(self.state['heading']))
 
         self.steps_left = self.max_steps
         self.speed_limit = 200
 
-        return self.observation()
+        return self.observation(0)
 
     def step(self, action):
         # Establish reward (penalty for living)
         reward = -0.01
-        self.state['steps_since_last_waypoint'] += 1
 
-        # Take action
-        steer, throttle = action
+        model = self.other_agent
 
-        # Get new heading
-        new_heading = getNewHeading(self.state['heading'], steer)
-        self.state['heading'] = new_heading
-
-        # Get new speed
-        new_speed = getNewSpeed(self.state['speed'], throttle, self.speed_limit)
-        self.state['speed'] = new_speed
-
-        # Update car velocity
-        self.car.velocity = (self.state['speed']*np.cos(self.state['heading']), self.state['speed']*np.sin(self.state['heading']))
+        # For each car,
+        for i, car in enumerate(self.cars):
+            if i != 0:
+                # Get action from model
+                other_action, _states = model.predict(self.observation(i).copy(), deterministic=True)
+                steer, throttle = other_action
+            else:
+                steer, throttle = action
+            # Get new heading
+            new_heading = getNewHeading(self.state['headings'][i], steer)
+            self.state['headings'][i] = new_heading
+            # Get new speed
+            new_speed = getNewSpeed(self.state['speeds'][i], throttle, self.speed_limit)
+            self.state['speeds'][i] = new_speed
+            # Update car velocity
+            car.velocity = (self.state['speeds'][i]*np.cos(self.state['headings'][i]), self.state['speeds'][i]*np.sin(self.state['headings'][i]))
 
         # Update space
         self.space.step(1/FPS)
@@ -290,7 +301,8 @@ class RacingEnv(gym.Env):
         # self.clock.tick(FPS)
 
         # Update state
-        self.state['position'] = self.car.position
+        for i, car in enumerate(self.cars):
+            self.state['positions'][i] = car.position
 
         # Update steps left
         self.steps_left -= 1
@@ -307,9 +319,9 @@ class RacingEnv(gym.Env):
             # Run out of steps
             self.steps_left <= 0,
             # Reached the end of the waypoints
-            self.state['current_waypoint'] == len(self.points) - 2,
+            self.state['current_waypoints'][0] >= len(self.points) - 2,
             # Haven't passed through a waypoint in a while
-            self.state['steps_since_last_waypoint'] > 500,
+            self.state['steps_since_last_waypoints'][0] > 500,
             # Collision with wall
             self.collision_penalty < 0
         ]
@@ -319,11 +331,11 @@ class RacingEnv(gym.Env):
         #     print(checks)
 
         if checks[2] or checks[0]:
-            reward -= max([10, 4 * self.state['current_waypoint']])
+            reward -= max([10, 4 * self.state['current_waypoint']]) # FIX
         elif checks[1]:
             reward += 100
 
-        observation = self.observation()
+        observation = self.observation(0)
 
         # Return observation, reward, done, info
         return observation, reward, done, {}
@@ -376,15 +388,16 @@ class RacingEnv(gym.Env):
         # if arbiter.is_first_contact:
         # Use the waypoint segment's index to determine which waypoint the car has passed through
         waypoint_index = self.waypoint_segments.index(arbiter.shapes[1])
+        car_index = self.cars.index(arbiter.shapes[0].body)
 
         # print("Collision with waypoint segment", waypoint_index)
-        self.state['in_waypoints'][waypoint_index] = True
+        self.state['in_waypoints'][car_index][waypoint_index] = True
 
-        if waypoint_index > self.state['current_waypoint']:
-            self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoint'])
-            self.state['current_waypoint'] = waypoint_index
-            self.state['next_waypoint'] = waypoint_index + 1
-            self.state['steps_since_last_waypoint'] = 0
+        if waypoint_index > self.state['current_waypoints'][car_index]:
+            self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoints'][car_index])
+            self.state['current_waypoints'][car_index] = waypoint_index
+            self.state['next_waypoints'][car_index] = waypoint_index + 1
+            self.state['steps_since_last_waypoints'][car_index] = 0
             # print(arbiter.shapes[0], arbiter.shapes[1])
         return True
     
@@ -395,20 +408,21 @@ class RacingEnv(gym.Env):
         elif arbiter.shapes[1] not in self.waypoint_segments:
             return True
         waypoint_index = self.waypoint_segments.index(arbiter.shapes[1])
-        self.state['in_waypoints'][waypoint_index] = False
+        self.state['in_waypoints'][self.cars.index(arbiter.shapes[0].body)][waypoint_index] = False
         return True
 
     def collisionBeginWalls(self, arbiter, space, data):
+        car_index = self.cars.index(arbiter.shapes[0].body)
         # If first time step or in waypoint, ignore collision
-        if self.steps_left == self.max_steps or any(self.state['in_waypoints']):
+        if self.steps_left == self.max_steps or any(self.state['in_waypoints'][car_index] or car_index != 0):
             return True
 
-        num_waypoints_passed = self.state['current_waypoint']
-        self.collision_penalty = min([-10, -4 * num_waypoints_passed])
+        num_waypoints_passed = self.state['current_waypoints'][car_index]
+        self.collision_penalty = -4 * num_waypoints_passed # FIX
         return True
 
     def collisionSeparateWalls(self, arbiter, space, data):
-        self.collision_penalty = 0
+        self.collision_penalty = 0 # FIX
         return True
 
     def seed(self, seed=None):
@@ -473,13 +487,22 @@ class CustomCNN(BaseFeaturesExtractor):
 
 ### Main ###
 if __name__ == "__main__":
-    maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
-    # Initialize environment
-    env = RacingEnv(maps, max_steps)
+    maps = ["../maps/map_10_30_800_800.pkl"]#, "../maps/map_30_50_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
 
+    # Define observation and action spaces
+    old_env = RacingEnvMaps(maps, max_steps)
+    old_env = make_vec_env(lambda: old_env, n_envs=1, seed=np.random.randint(0, 10000))
+    old_env = VecFrameStack(old_env, n_stack=3)
+    observation_space = old_env.observation_space
+    action_space = old_env.action_space
+
+    # Load the pretrained model
+    pretrained_model = PPO.load('../eval_models/actually_the_best.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
+
+    # Initialize environment
+    env = RacingEnv(maps, max_steps, pretrained_model)
     # Parallelize environment
     vec_env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
-
     # Frame stack
     vec_env = VecFrameStack(vec_env, n_stack=3)
 
@@ -491,11 +514,11 @@ if __name__ == "__main__":
 
     # Create model
     # model = PPO("CnnPolicy", vec_env, verbose=1, device="cpu")
-    model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda")
+    model = PPO.load('../eval_models/actually_the_best.zip', env=vec_env, device="cpu")
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback env
-    eval_env = RacingEnv(maps, max_steps)
+    eval_env = RacingEnv(maps, max_steps, pretrained_model)
     eval_env = make_vec_env(lambda: eval_env, n_envs=1, seed=np.random.randint(0, 10000))
     eval_env = VecFrameStack(eval_env, n_stack=3)
 
@@ -504,17 +527,5 @@ if __name__ == "__main__":
 
     # Train model
     model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True)
-
-    # Save model
-    model.save('../models/temp_model')
-
-    # Evaluate model
-    mean_reward, std_reward = evaluate_policy(model, model.get_env(), n_eval_episodes=10)
-    print(f'Mean reward: {mean_reward} +/- {std_reward}')
-
-    # Render n episodes
-    vec_env.reset()
-    playNEpisodes(5, vec_env, model, max_steps)
-
 
     print("Hello, world!")
