@@ -323,8 +323,8 @@ class RacingEnv(gym.Env):
         if self.waypoint_reward > 0:
             # Penalize the agent for moving too far away from other agent (scale to)
             distance = np.linalg.norm(self.cars[0].position - self.cars[1].position)
-            # If the distance is greater than 100, penalize the agent
-            if distance > 100:
+            # If the distance is greater than 30, penalize the agent
+            if distance > 30:
                 reward = -1
         self.waypoint_reward = 0
 
@@ -412,7 +412,8 @@ class RacingEnv(gym.Env):
         self.state['in_waypoints'][car_index][waypoint_index] = True
 
         if waypoint_index > self.state['current_waypoints'][car_index]:
-            self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoints'][car_index])
+            if car_index == 0:
+                self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoints'][car_index])
             self.state['current_waypoints'][car_index] = waypoint_index
             self.state['next_waypoints'][car_index] = waypoint_index + 1
             self.state['steps_since_last_waypoints'][car_index] = 0
