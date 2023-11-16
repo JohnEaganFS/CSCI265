@@ -199,7 +199,8 @@ class RacingEnv(gym.Env):
             'next_waypoints': [1 for i in range(2)],
             'steps_since_last_waypoints': [0 for i in range(2)],
             'in_waypoints': [[False for i in range(len(self.points) - 1)] for j in range(2)],
-            'previous_two_observations': [np.zeros((3, self.observation_size, self.observation_size)) for i in range(2)]
+            'previous_two_observations': [np.zeros((3, self.observation_size, self.observation_size)) for i in range(2)],
+            'other_car_collision': False
         }
 
         for car in self.cars:
@@ -227,12 +228,12 @@ class RacingEnv(gym.Env):
         draw_waypoint_segments(self.screen, self.points)
         # Redraw the waypoints
         draw_waypoints(self.screen, self.points, self.state['current_waypoints'][agent_id], self.state['next_waypoints'][agent_id])
-        # Draw car
-        pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 5)
         # Draw other car
         for i, car in enumerate(self.cars):
             if i != agent_id:
                 pygame.draw.circle(self.screen, (255, 0, 255), (int(car.position[0]), int(car.position[1])), 5)
+        # Draw car
+        pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 5)
 
         # Get observation (100x100 image around the car)
         # Define sub-surface
@@ -331,7 +332,7 @@ class RacingEnv(gym.Env):
         if self.waypoint_reward > 0:
             # Penalize the agent for moving too far away from other agent (scale to)
             # If the distance is greater than 30, penalize the agent
-            if distance_to_other_car > 30:
+            if distance_to_other_car > 30 and not(self.state['other_car_collision']):
                 reward = -1
         self.waypoint_reward = 0
 
@@ -444,6 +445,7 @@ class RacingEnv(gym.Env):
         car_index = self.cars.index(arbiter.shapes[0].body)
         # If first time step or in waypoint, ignore collision
         if self.steps_left == self.max_steps or any(self.state['in_waypoints'][car_index] or car_index != 0):
+            self.state['other_car_collision'] = True
             return True
 
         num_waypoints_passed = self.state['current_waypoints'][car_index]
@@ -470,7 +472,8 @@ def create_car(pos):
 ### Display Episodes in PyGame ###
 def playNEpisodes(n, env, model, max_steps=1000):
     for episode in range(n):
-        obs = env.reset()
+        if episode == 0:
+            obs = env.reset()
         for step in range(max_steps):
             action, _states = model.predict(obs.copy(), deterministic=True)
             # print("Action:", action)
@@ -516,7 +519,7 @@ class CustomCNN(BaseFeaturesExtractor):
 
 ### Main ###
 if __name__ == "__main__":
-    maps = ["../maps/map_10_30_800_800.pkl"]#, "../maps/map_30_50_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
+    maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
 
     # Define observation and action spaces
     old_env = RacingEnvMaps(maps, max_steps)
@@ -526,7 +529,7 @@ if __name__ == "__main__":
     action_space = old_env.action_space
 
     # Load the pretrained model
-    pretrained_model = PPO.load('../eval_models/actually_the_best.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
+    pretrained_model = PPO.load('../eval_models/best_coop.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
 
     # Initialize environment
     env = RacingEnv(maps, max_steps, pretrained_model)
@@ -543,7 +546,7 @@ if __name__ == "__main__":
 
     # Create model
     # model = PPO("CnnPolicy", vec_env, verbose=1, device="cpu")
-    model = PPO.load('../eval_models/actually_the_best.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
+    model = PPO.load('../eval_models/best_coop.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback env

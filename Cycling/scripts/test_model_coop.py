@@ -13,8 +13,8 @@ from stable_baselines3.common.vec_env import VecFrameStack
 max_steps = 5000
 
 if __name__ == "__main__":
-    # maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
-    maps = ["../maps/map_10_30_800_800.pkl"]
+    maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
+    # maps = ["../maps/map_10_30_800_800.pkl"]
 
     # Define observation and action spaces
     old_env = RacingEnvMaps(maps, max_steps)
@@ -25,6 +25,7 @@ if __name__ == "__main__":
 
     # Load the pretrained model
     pretrained_model = PPO.load('../eval_models/actually_the_best.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
+    # pretrained_model = PPO.load('../eval_models/best_coop.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
 
     # Create environment
     env = RacingEnv(maps, max_steps, pretrained_model)
