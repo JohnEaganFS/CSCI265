@@ -287,7 +287,7 @@ class RacingEnv(gym.Env):
 
         # For each car,
         for i, car in enumerate(self.cars):
-            if i != 0:
+            if i != 0 and not(self.state['other_car_collision']):
                 # Get action from model
                 current_obs = self.observation(i)
                 # Add previous two observations to current observation (to get 9 channels)
@@ -300,6 +300,7 @@ class RacingEnv(gym.Env):
                 self.state['previous_two_observations'][1] = current_obs
             else:
                 steer, throttle = action
+
             # Get new heading
             new_heading = getNewHeading(self.state['headings'][i], steer)
             self.state['headings'][i] = new_heading
@@ -348,7 +349,7 @@ class RacingEnv(gym.Env):
             # Reached the end of the waypoints
             self.state['current_waypoints'][0] >= len(self.points) - 2,
             # Haven't passed through a waypoint in a while
-            self.state['steps_since_last_waypoints'][0] > 500,
+            # self.state['steps_since_last_waypoints'][0] > 500,
             # Collision with wall
             self.collision_penalty < 0
         ]
@@ -357,7 +358,8 @@ class RacingEnv(gym.Env):
         # if (done):
         #     print(checks)
 
-        if checks[2] or checks[0]:
+        # if checks[2] or checks[0]:
+        if checks[0]:
             reward -= max([10, 4 * self.state['current_waypoints'][0]])
         # elif checks[1]:
         #     reward += 100 * (self.state['current_waypoints'][1] / len(self.points))
@@ -445,12 +447,20 @@ class RacingEnv(gym.Env):
     def collisionBeginWalls(self, arbiter, space, data):
         car_index = self.cars.index(arbiter.shapes[0].body)
         # If first time step or in waypoint, ignore collision
-        if self.steps_left == self.max_steps or any(self.state['in_waypoints'][car_index]) or car_index != 0:
-            self.state['other_car_collision'] = True
+        if self.steps_left == self.max_steps or any(self.state['in_waypoints'][car_index]):
             return True
 
-        num_waypoints_passed = self.state['current_waypoints'][car_index]
-        self.collision_penalty = -4 * num_waypoints_passed # FIX
+        if car_index == 0:
+            num_waypoints_passed = self.state['current_waypoints'][car_index]
+            self.collision_penalty = -4 * num_waypoints_passed # FIX
+        else:
+            self.state['other_car_collision'] = True
+            # Reset the other car to the current waypoint
+            x,y = self.points[self.state['current_waypoints'][1]-1]
+            self.cars[1].position = (x, y)
+            self.cars[1].velocity = (0, 0)
+            self.state['positions'][1] = self.points[self.state['current_waypoints'][1]]
+            self.state['speeds'][1] = 0
         return True
 
     def collisionSeparateWalls(self, arbiter, space, data):
@@ -481,6 +491,8 @@ def playNEpisodes(n, env, model, max_steps=1000):
             obs, reward, done, info = env.step(action)
 
             pygame.display.update()
+            # pygame.time.Clock().tick(FPS)
+
             if done:
                 print(f'Episode {episode} finished after {step} steps')
                 # Pause the game
