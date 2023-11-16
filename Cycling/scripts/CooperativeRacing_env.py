@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.path as mplPath
 from typing import Callable
 import time
+from cProfile import Profile
 
 # PyTorch
 import torch as th
@@ -208,24 +209,24 @@ class RacingEnv(gym.Env):
 
         # Draw the initial state
         self.screen.fill((0, 0, 0))
-        draw_waypoints(self.screen, self.points, self.state['current_waypoints'][0], self.state['next_waypoints'][0])
         draw_walls(self.screen, self.walls)
         draw_waypoint_segments(self.screen, self.points)
+        self.background = self.screen.copy()
+        draw_waypoints(self.screen, self.points, self.state['current_waypoints'][0], self.state['next_waypoints'][0])
         # draw_test_waypoints(self.screen, self.draw_waypoint_segments)
         pygame.display.flip()
+
 
     def observation(self, agent_id=0): # Make draw functions dependent on agent_id
         # Get car position
         car_pos = self.state['positions'][agent_id]
 
-        # Clear the screen
-        self.screen.fill((0, 0, 0))
+        # Load the background
+        self.screen.blit(self.background, (0, 0))
 
-        # Redraw the walls
         # draw_test_waypoints(self.screen, self.draw_waypoint_segments)
-        draw_walls(self.screen, self.walls)
         # Draw waypoint segments
-        draw_waypoint_segments(self.screen, self.points)
+        # draw_waypoint_segments(self.screen, self.points)
         # Redraw the waypoints
         draw_waypoints(self.screen, self.points, self.state['current_waypoints'][agent_id], self.state['next_waypoints'][agent_id])
         # Draw other car
