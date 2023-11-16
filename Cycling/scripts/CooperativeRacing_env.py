@@ -542,7 +542,7 @@ if __name__ == "__main__":
     action_space = old_env.action_space
 
     # Load the pretrained model
-    pretrained_model = PPO.load('../eval_models/actually_the_best.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
+    pretrained_model = PPO.load('../eval_models/best_cooperative.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
 
     # Initialize environment
     env = RacingEnv(maps, max_steps, pretrained_model)
@@ -559,7 +559,7 @@ if __name__ == "__main__":
 
     # Create model
     # model = PPO("CnnPolicy", vec_env, verbose=1, device="cpu")
-    model = PPO.load('../eval_models/actually_the_best.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
+    model = PPO.load('../eval_models/best_cooperative.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback env
