@@ -354,8 +354,8 @@ class RacingEnv(gym.Env):
         ]
         done = any(checks)
 
-        # if (done):
-        #     print(checks)
+        if (done):
+            print(checks)
 
         if checks[2] or checks[0]:
             reward -= max([10, 4 * self.state['current_waypoints'][0]])
@@ -445,7 +445,7 @@ class RacingEnv(gym.Env):
     def collisionBeginWalls(self, arbiter, space, data):
         car_index = self.cars.index(arbiter.shapes[0].body)
         # If first time step or in waypoint, ignore collision
-        if self.steps_left == self.max_steps or any(self.state['in_waypoints'][car_index] or car_index != 0):
+        if self.steps_left == self.max_steps or any(self.state['in_waypoints'][car_index]) or car_index != 0:
             self.state['other_car_collision'] = True
             return True
 
@@ -530,7 +530,7 @@ if __name__ == "__main__":
     action_space = old_env.action_space
 
     # Load the pretrained model
-    pretrained_model = PPO.load('../eval_models/best_coop.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
+    pretrained_model = PPO.load('../eval_models/actually_the_best.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
 
     # Initialize environment
     env = RacingEnv(maps, max_steps, pretrained_model)
@@ -547,7 +547,7 @@ if __name__ == "__main__":
 
     # Create model
     # model = PPO("CnnPolicy", vec_env, verbose=1, device="cpu")
-    model = PPO.load('../eval_models/best_coop.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
+    model = PPO.load('../eval_models/actually_the_best.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback env
