@@ -310,7 +310,7 @@ class RacingEnv(gym.Env):
             car.velocity = (self.state['speeds'][i]*np.cos(self.state['headings'][i]), self.state['speeds'][i]*np.sin(self.state['headings'][i]))
 
             # If close to the other car, gain a velocity bonus because of drafting
-            if distance_to_other_car < 10:
+            if abs(distance_to_other_car) < 10:
                 car.velocity = (car.velocity[0] * 1.1, car.velocity[1] * 1.1)
 
         # Update space
@@ -354,8 +354,8 @@ class RacingEnv(gym.Env):
         ]
         done = any(checks)
 
-        if (done):
-            print(checks)
+        # if (done):
+        #     print(checks)
 
         if checks[2] or checks[0]:
             reward -= max([10, 4 * self.state['current_waypoints'][0]])

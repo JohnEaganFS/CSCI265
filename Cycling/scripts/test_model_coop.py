@@ -36,7 +36,7 @@ if __name__ == "__main__":
     # model = PPO.load("../models/temp_model")
     # model = PPO.load("../eval_models/best_model.zip")
     # model = PPO.load("../eval_models/actually_the_best.zip", env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
-    model = PPO.load("../eval_models/actually_the_best.zip", env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
+    model = PPO.load("../eval_models/best_model.zip", env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
 
 
     # Play episodes
