@@ -281,6 +281,8 @@ class RacingEnv(gym.Env):
 
         model = self.other_agent
 
+        distance_to_other_car = np.linalg.norm(self.cars[0].position - self.cars[1].position)
+
         # For each car,
         for i, car in enumerate(self.cars):
             if i != 0:
@@ -305,6 +307,10 @@ class RacingEnv(gym.Env):
             # Update car velocity
             car.velocity = (self.state['speeds'][i]*np.cos(self.state['headings'][i]), self.state['speeds'][i]*np.sin(self.state['headings'][i]))
 
+            # If close to the other car, gain a velocity bonus because of drafting
+            if distance_to_other_car < 10:
+                car.velocity = (car.velocity[0] * 1.1, car.velocity[1] * 1.1)
+
         # Update space
         self.space.step(1/FPS)
         # pygame.display.flip()
@@ -317,14 +323,15 @@ class RacingEnv(gym.Env):
         # Update steps left
         self.steps_left -= 1
 
+        distance_to_other_car = np.linalg.norm(self.cars[0].position - self.cars[1].position)
+
         ### Reward Shaping ###
         # Check for reward gained from passing through waypoints
         reward += self.waypoint_reward
         if self.waypoint_reward > 0:
             # Penalize the agent for moving too far away from other agent (scale to)
-            distance = np.linalg.norm(self.cars[0].position - self.cars[1].position)
             # If the distance is greater than 30, penalize the agent
-            if distance > 30:
+            if distance_to_other_car > 30:
                 reward = -1
         self.waypoint_reward = 0
 
@@ -349,11 +356,14 @@ class RacingEnv(gym.Env):
         #     print(checks)
 
         if checks[2] or checks[0]:
-            reward -= max([10, 4 * self.state['current_waypoint']]) # FIX
-        elif checks[1]:
-            reward += 100
+            reward -= max([10, 4 * self.state['current_waypoints'][0]])
+        # elif checks[1]:
+        #     reward += 100 * (self.state['current_waypoints'][1] / len(self.points))
 
         observation = self.observation(0)
+
+        # if abs(reward) > 0.01:
+        #     print("Reward:", reward)
 
         # Return observation, reward, done, info
         return observation, reward, done, {}
