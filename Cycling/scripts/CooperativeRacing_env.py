@@ -312,7 +312,7 @@ class RacingEnv(gym.Env):
                 current_obs = self.observation(i)
                 # Add previous two observations to current observation (to get 9 channels)
                 three_stack_obs = np.concatenate((current_obs, self.state['previous_two_observations'][0], self.state['previous_two_observations'][1]), axis=0)
-                other_action, _states = model.predict(three_stack_obs.copy(), deterministic=False) # SLOW AF
+                other_action, _states = model.predict(three_stack_obs.copy(), deterministic=True) # SLOW AF
                 steer, throttle = other_action
 
                 # Update previous two observations
@@ -381,7 +381,7 @@ class RacingEnv(gym.Env):
 
         # if checks[2] or checks[0]:
         if checks[0]:
-            reward -= max([10, 4 * self.state['current_waypoints'][0]])
+            reward -= max([10, 2.5 * self.state['current_waypoints'][0]])
         # elif checks[1]:
         #     reward += 100 * (self.state['current_waypoints'][1] / len(self.points))
 
@@ -564,7 +564,7 @@ class CustomCallback(BaseCallback):
             self.other_agent = self.model
 
         # Update the environment's other_agent variable
-        self.training_env.set_attr('other_agent', self.other_agent)
+        # self.training_env.set_attr('other_agent', self.other_agent)
 
         return True
     
@@ -584,13 +584,13 @@ if __name__ == "__main__":
     action_space = old_env.action_space
 
     # Load the pretrained model
-    # pretrained_model = PPO.load('../eval_models/best_cooperative.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space}, device="cuda")
-    pretrained_model = PPO("CnnPolicy", old_env, verbose=1, device="cuda")
+    pretrained_model = PPO.load('../eval_models/best_cooperative_2.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space}, device="cuda")
+    # pretrained_model = PPO("CnnPolicy", old_env, verbose=1, device="cuda")
 
     # Initialize environment
     env = RacingEnv(maps, max_steps, pretrained_model)
     # Parallelize environment
-    vec_env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
+    vec_env = make_vec_env(lambda: env, n_envs=5, seed=np.random.randint(0, 10000))
     # Frame stack
     vec_env = VecFrameStack(vec_env, n_stack=3)
 
@@ -601,8 +601,8 @@ if __name__ == "__main__":
     )
 
     # Create model
-    model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda")
-    # model = PPO.load('../eval_models/best_cooperative.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
+    # model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda")
+    model = PPO.load('../eval_models/best_cooperative_2.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback env
@@ -611,7 +611,7 @@ if __name__ == "__main__":
     eval_env = VecFrameStack(eval_env, n_stack=3)
 
     # Callbacks
-    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=5000, deterministic=False, render=False, verbose=1, n_eval_episodes=6, callback_on_new_best=CustomCallback())
+    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=5000, deterministic=True, render=False, verbose=1, n_eval_episodes=6, callback_on_new_best=CustomCallback())
 
     # Train model
     model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True)
