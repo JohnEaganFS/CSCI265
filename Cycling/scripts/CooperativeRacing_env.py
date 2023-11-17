@@ -21,7 +21,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env import VecFrameStack
-from stable_baselines3.common.callbacks import EvalCallback, ProgressBarCallback
+from stable_baselines3.common.callbacks import EvalCallback, ProgressBarCallback, BaseCallback
 
 # Simulation (pygame, pymunk)
 import pygame
@@ -83,14 +83,16 @@ def getNewSpeed(speed, throttle, speed_limit):
 
     if new_speed > speed_limit:
         new_speed = speed_limit
-    elif new_speed < 30:
-        new_speed = 30
+    elif new_speed < 5:
+        new_speed = 5
+    # elif new_speed < 30:
+    #     new_speed = 30
     
     return new_speed
 
 ### Global Variables ###
 # Model parameters
-max_steps = 5000
+max_steps = 2000
 total_timesteps = 3000000
 observation_size = 64
 
@@ -220,6 +222,10 @@ class RacingEnv(gym.Env):
     def observation(self, agent_id=0): # Make draw functions dependent on agent_id
         # Get car position
         car_pos = self.state['positions'][agent_id]
+        current_car_waypoint = self.state['current_waypoints'][agent_id]
+        other_car_waypoint = self.state['current_waypoints'][1 - agent_id]
+        cc_dist_to_next_waypoint = np.linalg.norm(car_pos - self.points[self.state['next_waypoints'][agent_id]])
+        oc_dist_to_next_waypoint = np.linalg.norm(self.cars[agent_id].position - self.points[self.state['next_waypoints'][1 - agent_id]])
 
         # Load the background
         # self.screen.blit(self.background, (0, 0))
@@ -235,10 +241,17 @@ class RacingEnv(gym.Env):
                 # Erase previous position
                 pygame.draw.circle(self.screen, (0, 0, 0), (int(self.state['previous_positions'][i][0]), int(self.state['previous_positions'][i][1])), 5)
                 pygame.draw.circle(self.screen, (255, 0, 255), (int(car.position[0]), int(car.position[1])), 5)
+
         # Erase previous position
         pygame.draw.circle(self.screen, (0, 0, 0), (int(self.state['previous_positions'][agent_id][0]), int(self.state['previous_positions'][agent_id][1])), 5)
         # Draw car
         pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 5)
+        # If you are behind the other car, draw a small circle on yourself to indicate that you are behind
+        if current_car_waypoint < other_car_waypoint or (current_car_waypoint == other_car_waypoint and cc_dist_to_next_waypoint > oc_dist_to_next_waypoint):
+            pygame.draw.circle(self.screen, (0, 255, 0), (int(car_pos[0]), int(car_pos[1])), 3)
+        if self.state['other_car_collision']:
+            pygame.draw.circle(self.screen, (128, 128, 128), (int(car_pos[0]), int(car_pos[1])), 3)
+
 
         # Get observation (100x100 image around the car)
         # Define sub-surface
@@ -280,7 +293,7 @@ class RacingEnv(gym.Env):
         self.setup(map, self.max_steps)
 
         self.steps_left = self.max_steps
-        self.speed_limit = 200
+        self.speed_limit = 30
 
         return self.observation(0)
 
@@ -319,8 +332,8 @@ class RacingEnv(gym.Env):
 
                 # If close to the other car, gain a velocity bonus because of drafting
                 if abs(distance_to_other_car) < 10:
-                    # self.speed_limit = 200
-                    car.velocity = (car.velocity[0] * 1.1, car.velocity[1] * 1.1)
+                    self.speed_limit = 200
+                    # car.velocity = (car.velocity[0] * 1.1, car.velocity[1] * 1.1)
 
         # Update space
         self.space.step(1/FPS)
@@ -465,11 +478,7 @@ class RacingEnv(gym.Env):
         else:
             self.state['other_car_collision'] = True
             # Reset the other car to the current waypoint
-            x,y = self.points[self.state['current_waypoints'][1]-1]
-            self.state['previous_positions'][1] = (x, y)
-            self.cars[1].position = (x, y)
             self.cars[1].velocity = (0, 0)
-            self.state['positions'][1] = self.points[self.state['current_waypoints'][1]-1]
             self.state['speeds'][1] = 0
         return True
 
@@ -539,10 +548,33 @@ class CustomCNN(BaseFeaturesExtractor):
     def forward(self, observations: th.Tensor) -> th.Tensor:
         return self.linear(self.cnn(observations))
     
+class CustomCallback(BaseCallback):
+    """
+    Custom Callback that should be called after a new best model is saved.
+    I want this callback to update the environment's other_agent variable with the new model so the agent is training against the most recent model.
+    """
+    def __init__(self, verbose=0):
+        super(CustomCallback, self).__init__(verbose)
+        self.other_agent = None
+
+    def _on_step(self) -> bool:
+        if self.other_agent is None:
+            self.other_agent = self.model
+        else:
+            self.other_agent = self.model
+
+        # Update the environment's other_agent variable
+        self.training_env.set_attr('other_agent', self.other_agent)
+
+        return True
+    
+
+
 
 ### Main ###
 if __name__ == "__main__":
-    maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_30_50_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
+    maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
+    # maps = ["../maps/map_30_50_800_800.pkl"]
 
     # Define observation and action spaces
     old_env = RacingEnvMaps(maps, max_steps)
@@ -552,12 +584,13 @@ if __name__ == "__main__":
     action_space = old_env.action_space
 
     # Load the pretrained model
-    pretrained_model = PPO.load('../eval_models/best_cooperative.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space}, device="cuda")
+    # pretrained_model = PPO.load('../eval_models/best_cooperative.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space}, device="cuda")
+    pretrained_model = PPO("CnnPolicy", old_env, verbose=1, device="cuda")
 
     # Initialize environment
     env = RacingEnv(maps, max_steps, pretrained_model)
     # Parallelize environment
-    vec_env = make_vec_env(lambda: env, n_envs=5, seed=np.random.randint(0, 10000))
+    vec_env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
     # Frame stack
     vec_env = VecFrameStack(vec_env, n_stack=3)
 
@@ -568,8 +601,8 @@ if __name__ == "__main__":
     )
 
     # Create model
-    # model = PPO("CnnPolicy", vec_env, verbose=1, device="cpu")
-    model = PPO.load('../eval_models/best_cooperative.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
+    model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda")
+    # model = PPO.load('../eval_models/best_cooperative.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback env
@@ -578,7 +611,7 @@ if __name__ == "__main__":
     eval_env = VecFrameStack(eval_env, n_stack=3)
 
     # Callbacks
-    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=5000, deterministic=True, render=False, verbose=1, n_eval_episodes=10)
+    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=5000, deterministic=False, render=False, verbose=1, n_eval_episodes=6, callback_on_new_best=CustomCallback())
 
     # Train model
     model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True)
