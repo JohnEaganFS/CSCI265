@@ -24,8 +24,9 @@ if __name__ == "__main__":
     action_space = old_env.action_space
 
     # Load the pretrained model
-    pretrained_model = PPO.load('../eval_models/best_model.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
     # pretrained_model = PPO.load('../eval_models/best_coop.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
+    pretrained_model = PPO.load('../eval_models/best_model.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
+    # pretrained_model = PPO.load('../eval_models/temp_model.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
 
     # Create environment
     env = RacingEnv(maps, max_steps, pretrained_model)
@@ -37,7 +38,7 @@ if __name__ == "__main__":
     # model = PPO.load("../eval_models/best_model.zip")
     # model = PPO.load("../eval_models/actually_the_best.zip", env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
     model = PPO.load("../eval_models/best_model.zip", env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
-
+    # model = PPO.load("../eval_models/temp_model.zip", env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
 
     # Play episodes
     playNEpisodes(10, env, model, max_steps)
