@@ -24,7 +24,6 @@ from stable_baselines3.common.callbacks import EvalCallback, ProgressBarCallback
 
 # Simulation (pygame, pymunk)
 import pygame
-import pygame.gfxdraw
 import pymunk
 import pickle
 
