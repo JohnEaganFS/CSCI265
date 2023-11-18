@@ -40,6 +40,18 @@ max_steps = 2000
 total_timesteps = 1000000
 observation_size = 64
 num_agents = 2
+n_envs = 4
+
+hyperparameters = {
+    'n_steps': 2048,
+    'batch_size': 128,
+    'gamma': 0.99,
+    'ent_coef': 0.001,
+    'vf_coef': 0.5,
+    'learning_rate': 0.0001,
+    'gae_lambda': 0.95,
+    'clip_range': 0.2
+}
 
 # Pygame parameters
 FPS = 120
@@ -67,7 +79,7 @@ def defineActionSpace():
 
 ### Environment ###
 class RacingEnv(gym.Env):
-    def __init__(self, maps, max_steps, num_agents, model=None):
+    def __init__(self, maps, max_steps, num_agents, model=None, evaluating=False):
         # Initialize environment variables (should not change)
         self.maps = maps
         self.max_steps = max_steps
@@ -76,6 +88,7 @@ class RacingEnv(gym.Env):
         self.other_agent = model
         self.observation_space = defineObservationSpace()
         self.action_space = defineActionSpace()
+        self.evaluating = evaluating
 
     def setup(self):
         # Load map data
@@ -198,7 +211,7 @@ class RacingEnv(gym.Env):
         # if current_car_waypoint < other_car_waypoint or (current_car_waypoint == other_car_waypoint and cc_dist_to_next_waypoint > oc_dist_to_next_waypoint):
         if self.state['current_waypoints'][agent_id] < first_place_waypoint or (self.state['current_waypoints'][agent_id] == first_place_waypoint and any([self.state['distance_to_next_waypoints'][agent_id][0] > self.state['distance_to_next_waypoints'][cars_in_front[i]][0] for i in range(len(cars_in_front))])):
             pygame.draw.circle(self.screen, (0, 0, 0), (int(car_pos[0]), int(car_pos[1])), 3)
-        if all(self.state['other_car_collisions']):
+        if all(self.state['other_car_collisions'][1:]):
             pygame.draw.circle(self.screen, (128, 128, 128), (int(car_pos[0]), int(car_pos[1])), 3)
 
 
@@ -235,6 +248,7 @@ class RacingEnv(gym.Env):
         num_agents = self.num_agents
         current_map = self.current_map
         other_agent = self.other_agent
+        evaluating = self.evaluating
         # Clear all self variables (except maps)
         self.__dict__.clear()
         self.maps = maps
@@ -244,13 +258,16 @@ class RacingEnv(gym.Env):
         self.other_agent = other_agent
         self.observation_space = defineObservationSpace()
         self.action_space = defineActionSpace()
+        self.evaluating = evaluating
 
-        # map = np.random.choice(self.maps)
+        random_map = np.random.choice(self.maps)
         # Update map to next map
         if self.current_map is None:
             self.current_map = self.maps[0]
-        else:
+        elif self.evaluating:
             self.current_map = self.maps[(self.maps.index(self.current_map) + 1) % len(self.maps)]
+        else:
+            self.current_map = random_map
         self.setup()
 
         return self.observation(0)
@@ -352,8 +369,8 @@ class RacingEnv(gym.Env):
         # if checks[2] or checks[0]:
         if checks[0] or checks[2]:
             reward -= max([10, 4 * self.state['current_waypoints'][0]])
-        elif checks[1]:
-            reward += 100
+        # elif checks[1]:
+        #     reward += 100
 
         observation = self.observation(0)
 
@@ -443,7 +460,7 @@ class RacingEnv(gym.Env):
 
         if car_index == 0:
             num_waypoints_passed = self.state['current_waypoints'][car_index]
-            self.collision_penalty = -4 * num_waypoints_passed # FIX
+            self.collision_penalty = -2.5 * num_waypoints_passed # FIX
         else:
             self.state['other_car_collisions'][car_index] = True
             # Reset the other car to the current waypoint
@@ -533,7 +550,7 @@ class CustomCallback(BaseCallback):
             self.other_agent = self.model
 
         # Update the environment's other_agent variable
-        self.training_env.set_attr('other_agent', self.other_agent)
+        # self.training_env.set_attr('other_agent', self.other_agent)
 
         return True
     
@@ -542,9 +559,12 @@ class EveryUpdateCallback(BaseCallback):
         super(EveryUpdateCallback, self).__init__(verbose)
     
     def _on_step(self) -> bool:
+        # Get access to the parent callback info
+        parent_callback = self.parent
+
         # Save the model
         self.model.save('../eval_models/temp_model')
-        # self.training_env.set_attr('other_agent', self.model)
+        self.training_env.set_attr('other_agent', self.model)
         return True
 
 
@@ -567,18 +587,18 @@ if __name__ == "__main__":
     # Initialize environment
     env = RacingEnv(maps, max_steps, num_agents, pretrained_model)
     # Parallelize environment
-    vec_env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
+    vec_env = make_vec_env(lambda: env, n_envs=n_envs, seed=np.random.randint(0, 10000))
     # Frame stack
     vec_env = VecFrameStack(vec_env, n_stack=3)
 
     # Policy Args
-    policy_kwargs = dict(
-        features_extractor_class=CustomCNN,
-        features_extractor_kwargs=dict(features_dim=32)
-    )
+    # policy_kwargs = dict(
+    #     features_extractor_class=CustomCNN,
+    #     features_extractor_kwargs=dict(features_dim=32)
+    # )
 
     # Create model
-    model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda")
+    model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda", **hyperparameters)
     # model = PPO.load('../eval_models/best_model_temp.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
@@ -588,7 +608,7 @@ if __name__ == "__main__":
     eval_env = VecFrameStack(eval_env, n_stack=3)
 
     # Callbacks
-    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=5000, deterministic=True, render=False, verbose=1, n_eval_episodes=6, callback_on_new_best=CustomCallback(), callback_after_eval=EveryUpdateCallback())
+    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=5000, deterministic=True, render=False, verbose=1, n_eval_episodes=12, callback_on_new_best=CustomCallback(), callback_after_eval=EveryUpdateCallback())
 
     # Train model
     model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True)
