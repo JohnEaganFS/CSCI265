@@ -246,7 +246,11 @@ class RacingEnv(gym.Env):
             if i != agent_id:
                 # Erase previous position
                 pygame.draw.circle(self.screen, (0, 0, 0), (int(self.state['previous_positions'][i][0]), int(self.state['previous_positions'][i][1])), 5)
-                pygame.draw.circle(self.screen, (255, 0, 255), (int(car.position[0]), int(car.position[1])), 5)
+                # pygame.draw.circle(self.screen, (255, 0, 255), (int(car.position[0]), int(car.position[1])), 5)
+         # Draw waypoint segments
+        draw_waypoint_segments(self.screen, self.points)
+        # Redraw the waypoints
+        draw_waypoints(self.screen, self.points, self.state['current_waypoints'][agent_id]-1, self.state['next_waypoints'][agent_id]-1)
 
         # Erase previous position
         pygame.draw.circle(self.screen, (0, 0, 0), (int(self.state['previous_positions'][agent_id][0]), int(self.state['previous_positions'][agent_id][1])), 5)
@@ -408,8 +412,8 @@ class RacingEnv(gym.Env):
         # if checks[2] or checks[0]:
         if checks[0] or checks[2]:
             reward -= max([10, 4 * self.state['current_waypoints'][0]])
-        # elif checks[1]:
-        #     reward += 100 * (self.state['current_waypoints'][1] / len(self.points))
+        elif checks[1]:
+            reward += 100 * (self.state['current_waypoints'][1] / len(self.points))
 
         observation = self.observation(0)
 
@@ -627,7 +631,7 @@ if __name__ == "__main__":
     action_space = old_env.action_space
 
     # Load the pretrained model
-    # pretrained_model = PPO.load('../eval_models/best_cooperative_2.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space}, device="cuda")
+    # pretrained_model = PPO.load('../eval_models/best_model_temp.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space}, device="cuda")
     pretrained_model = PPO("CnnPolicy", old_env, verbose=1, device="cuda")
 
     # Initialize environment
@@ -644,11 +648,11 @@ if __name__ == "__main__":
     )
 
     # Create model
-    model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda")
-    # model = PPO.load('../eval_models/best_cooperative_2.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
+    model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda", batch_size=2048, policy_kwargs=policy_kwargs)
+    # model = PPO.load('../eval_models/best_model_temp.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
-    # Callback env
+    # Callback envs
     eval_env = RacingEnv(maps, max_steps, model)
     eval_env = make_vec_env(lambda: eval_env, n_envs=1, seed=np.random.randint(0, 10000))
     eval_env = VecFrameStack(eval_env, n_stack=3)
