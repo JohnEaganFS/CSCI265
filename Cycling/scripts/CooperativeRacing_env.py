@@ -165,7 +165,6 @@ class RacingEnv(gym.Env):
         # draw_test_waypoints(self.screen, self.draw_waypoint_segments)
         # pygame.display.flip()
 
-
     def observation(self, agent_id=0): # Make draw functions dependent on agent_id
         car_pos = self.state['positions'][agent_id]
         # Sort the cars by distance to next waypoint
@@ -177,11 +176,6 @@ class RacingEnv(gym.Env):
         # Load the background
         # self.screen.blit(self.background, (0, 0))
 
-        # draw_test_waypoints(self.screen, self.draw_waypoint_segments)
-        # Draw waypoint segments
-        draw_waypoint_segments(self.screen, self.points)
-        # Redraw the waypoints
-        draw_waypoints(self.screen, self.points, self.state['current_waypoints'][agent_id]-1, self.state['next_waypoints'][agent_id]-1)
         # Draw other car
         for i, car in enumerate(self.cars):
             if i != agent_id:
@@ -189,7 +183,8 @@ class RacingEnv(gym.Env):
                 pygame.draw.circle(self.screen, (0, 0, 0), (int(self.state['previous_positions'][i][0]), int(self.state['previous_positions'][i][1])), 5)
                 # Draw the car
                 pygame.draw.circle(self.screen, (255, 0, 255), (int(car.position[0]), int(car.position[1])), 5)
-         # Draw waypoint segments
+        # draw_test_waypoints(self.screen, self.draw_waypoint_segments)
+        # Draw waypoint segments
         draw_waypoint_segments(self.screen, self.points)
         # Redraw the waypoints
         draw_waypoints(self.screen, self.points, self.state['current_waypoints'][agent_id]-1, self.state['next_waypoints'][agent_id]-1)
@@ -207,8 +202,8 @@ class RacingEnv(gym.Env):
             pygame.draw.circle(self.screen, (128, 128, 128), (int(car_pos[0]), int(car_pos[1])), 3)
 
 
-        # Get observation (100x100 image around the car)
-        oversample_size = 64
+        # Get observation (maybe oversample and then downsample for better distance, but worse aliasing)
+        oversample_size = observation_size
         # Define sub-surface
         observation = pygame.Surface((oversample_size, oversample_size))
         observation.blit(self.screen, (0, 0), (car_pos[0] - oversample_size / 2, car_pos[1] - oversample_size / 2, oversample_size, oversample_size))
@@ -216,16 +211,18 @@ class RacingEnv(gym.Env):
         # observation.blit(self.screen, (0, 0), (car_pos[0] - self.observation_size / 2, car_pos[1] - self.observation_size / 2, self.observation_size, self.observation_size))
         # Rotate the surface according to the heading
         observation = pygame.transform.rotate(observation, self.state['headings'][agent_id] * 180 / np.pi)
-        # Resize the surface back to 100x100
-        observation = pygame.transform.scale(observation, (self.observation_size, self.observation_size))
         # Flip the surface vertically
         observation = pygame.transform.flip(observation, True, False)
+        obs_copy = observation.copy()
+        # Resize the surface back to the observation size
+        observation = pygame.transform.scale(observation, (self.observation_size, self.observation_size))
         observation = pygame.surfarray.pixels3d(observation)
+        obs_copy = pygame.surfarray.pixels3d(obs_copy)
 
         # Randomly (approximately every 20 frames) do this
-        if np.random.randint(0, 20) == 0 and agent_id == 0:
-            plt.imshow(observation)
-            plt.show()
+        # if np.random.randint(0, 20) == 0 and agent_id == 0:
+        #     plt.imshow(obs_copy)
+        #     plt.show()
 
         # Convert to CxHxW
         observation = np.transpose(observation, (2, 0, 1))

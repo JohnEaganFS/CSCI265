@@ -12,7 +12,7 @@ from stable_baselines3.common.vec_env import VecFrameStack
 
 max_steps = 2000
 num_agents = 2
-filename = "actually_the_best.zip"
+filename = "best_model.zip"
 
 if __name__ == "__main__":
     maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
