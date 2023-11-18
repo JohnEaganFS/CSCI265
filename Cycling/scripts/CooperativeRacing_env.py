@@ -38,7 +38,7 @@ from CustomRacing2D_env import draw_waypoints
 # Model parameters
 max_steps = 2000
 total_timesteps = 1000000
-observation_size = 64
+observation_size = 128
 num_agents = 2
 n_envs = 4
 
@@ -603,7 +603,7 @@ if __name__ == "__main__":
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback envs
-    eval_env = RacingEnv(maps, max_steps, num_agents, pretrained_model)
+    eval_env = RacingEnv(maps, max_steps, num_agents, pretrained_model, evaluating=True)
     eval_env = make_vec_env(lambda: eval_env, n_envs=1, seed=np.random.randint(0, 10000))
     eval_env = VecFrameStack(eval_env, n_stack=3)
 
