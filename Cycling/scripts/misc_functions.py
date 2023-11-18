@@ -18,7 +18,7 @@ def draw_walls(screen, pl_set):
 
 def draw_waypoint_segments(screen, points):
     for i in range(len(points) - 1):
-        pygame.draw.line(screen, (255, 255, 255), points[i], points[i + 1], 2)
+        pygame.draw.line(screen, (255, 255, 255), points[i], points[i + 1], 4)
 
 def draw_test_waypoints(screen, points):
     for p1, p2, p3, p4 in points:
