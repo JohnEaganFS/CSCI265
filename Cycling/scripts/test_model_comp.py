@@ -32,7 +32,7 @@ if __name__ == "__main__":
     pretrained_model = PPO.load('../eval_models/' + filename)
 
     # Create environment
-    env = RacingEnv(maps, max_steps, num_agents, pretrained_model, evaluating=True)
+    env = RacingEnv(maps, max_steps, num_agents, pretrained_model, evaluating=True, model_filename=filename)
     env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
     env = VecFrameStack(env, n_stack=3)
 

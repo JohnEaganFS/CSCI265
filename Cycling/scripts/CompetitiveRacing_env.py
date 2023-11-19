@@ -81,7 +81,7 @@ def defineActionSpace():
 
 ### Environment ###
 class RacingEnv(gym.Env):
-    def __init__(self, maps, max_steps, num_agents, model=None, evaluating=False):
+    def __init__(self, maps, max_steps, num_agents, model=None, evaluating=False, model_filename=None):
         # Initialize environment variables (should not change)
         self.maps = maps
         self.max_steps = max_steps
@@ -91,6 +91,7 @@ class RacingEnv(gym.Env):
         self.observation_space = defineObservationSpace()
         self.action_space = defineActionSpace()
         self.evaluating = evaluating
+        self.model_filename = model_filename
 
     def setup(self):
         # Load map data
@@ -274,7 +275,9 @@ class RacingEnv(gym.Env):
         max_steps = self.max_steps
         num_agents = self.num_agents
         current_map = self.current_map
+        other_agent = self.other_agent
         evaluating = self.evaluating
+        model_filename = self.model_filename
         # Clear all self variables (except maps)
         self.__dict__.clear()
         self.maps = maps
@@ -282,12 +285,16 @@ class RacingEnv(gym.Env):
         self.num_agents = num_agents
         self.current_map = current_map
         if evaluating:
-            self.other_agent = PPO.load('../eval_models/best_model.zip')
+            self.other_agent = PPO.load('../eval_models/' + model_filename)
+            # self.other_agent = PPO.load('../eval_models/good_models/comp_model.zip')
         else:
-            self.other_agent = PPO.load('../eval_models/temp_model.zip')
+            self.other_agent = other_agent
+            # self.other_agent = PPO.load('../eval_models/temp_model.zip')
         self.observation_space = defineObservationSpace()
         self.action_space = defineActionSpace()
         self.evaluating = evaluating
+        self.model_filename = model_filename
+
 
         random_map = np.random.choice(self.maps)
         # Update map to next map
@@ -686,8 +693,8 @@ if __name__ == "__main__":
     # )
 
     # Create model
-    model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda", **hyperparameters)
-    # model = PPO.load('../eval_models/best_model_temp.zip', env=vec_env, custom_objects={'observation_space': vec_env.observation_space, 'action_space': vec_env.action_space}, device="cuda")
+    # model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda", **hyperparameters)
+    model = PPO.load('../eval_models/best_model.zip', env=vec_env, device="cuda", **hyperparameters)
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback envs
