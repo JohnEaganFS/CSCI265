@@ -1,3 +1,7 @@
+# Ideas:
+# 1. No map rotation, just with arrow tip
+# 2. Energy limitation, coop by being close to other car (use less energy)
+
 ### Imports ###
 # Standard
 import numpy as np
@@ -43,11 +47,11 @@ n_envs = 4
 
 hyperparameters = {
     'n_steps': 2048,
-    'batch_size': 128,
+    'batch_size': 1024,
     'gamma': 0.99,
     'ent_coef': 0.001,
     'vf_coef': 0.5,
-    'learning_rate': 0.0001,
+    # 'learning_rate': 0.0001,
     'gae_lambda': 0.95,
     'clip_range': 0.2
 }
@@ -93,8 +97,8 @@ class RacingEnv(gym.Env):
         # Load map data
         with open(self.current_map, 'rb') as f:
             self.space, self.points, self.boundaries, self.screen_size, self.walls = pickle.load(f)
-            self.points = self.points[1:len(self.points) - 1]
-            self.boundaries = self.boundaries[1:len(self.boundaries) - 1]
+            self.points = self.points[2:len(self.points) - 1]
+            self.boundaries = self.boundaries[2:len(self.boundaries) - 1]
             # Set all shapes in space to have collision type 3
             for shape in self.space.shapes:
                 shape.collision_type = 3
@@ -110,11 +114,11 @@ class RacingEnv(gym.Env):
         self.collision_penalty = 0
         self.reward_history = []
 
-        random_positions = self.points[0] + np.random.normal(0, 5, (self.num_agents, 2))
+        # random_positions = self.points[0] + np.random.normal(0, 5, (self.num_agents, 2))
         # Add cars to the space
         self.cars = []
         for i in range(self.num_agents):
-            car, car_shape = create_car(random_positions[i])
+            car, car_shape = create_car(self.points[0])
             self.cars.append(car)
             self.space.add(car, car_shape)
 
@@ -144,23 +148,27 @@ class RacingEnv(gym.Env):
         self.collision_handler_walls = self.space.add_collision_handler(1, 3)
         self.collision_handler_walls.begin = self.collisionBeginWalls
         self.collision_handler_walls.separate = self.collisionSeparateWalls
-        self.collision_handler_walls.post_solve = self.collisionBeginWalls
+        self.collision_handler_walls.pre_solve = self.collisionBeginWalls
 
         # Add collision handler for car and car
         self.collision_handler_car = self.space.add_collision_handler(1, 1)
         self.collision_handler_car.begin = self.collisionBeginCar
         self.collision_handler_car.separate = self.collisionSeparateCar
 
+        angle_to_next_waypoint = np.arctan2(self.points[1][1] - self.points[0][1], self.points[1][0] - self.points[0][0])
+        angle_in_degrees = angle_to_next_waypoint * 180 / np.pi
+
         # Initialize state
         self.state = {
             'positions': [self.points[0] for i in range(self.num_agents)],
             # 'headings': [np.arctan2(self.points[1][1] - self.cars[i].position[1], self.points[1][0] - self.cars[i].position[0]) for i in range(self.num_agents)],
-            'headings': [np.random.uniform(-np.pi, np.pi) for i in range(self.num_agents)],
+            'headings': [(angle_in_degrees + np.random.normal(0, 20)) * np.pi / 180 for i in range(self.num_agents)],
             'speeds': [0 for i in range(self.num_agents)],
             'current_waypoints': [0 for i in range(self.num_agents)],
             'next_waypoints': [1 for i in range(self.num_agents)],
             'steps_since_last_waypoints': [0 for i in range(self.num_agents)],
-            'in_waypoints': [[False for i in range(len(self.points) - 1)] for j in range(self.num_agents)],
+            # 'in_waypoints': [[False for i in range(len(self.points) - 1)] for j in range(self.num_agents)],
+            'in_waypoints': [[True] + [False for i in range(len(self.points) - 2)] for j in range(self.num_agents)],
             'previous_two_observations': [[np.zeros((3, self.observation_size, self.observation_size)) for i in range(2)] for j in range(self.num_agents)],
             'other_car_collisions': [False for i in range(self.num_agents)],
             'previous_positions': [self.points[0] for i in range(self.num_agents)],
@@ -171,7 +179,7 @@ class RacingEnv(gym.Env):
             car.velocity = (self.state['speeds'][i]*np.cos(self.state['headings'][i]), self.state['speeds'][i]*np.sin(self.state['headings'][i]))
 
         # Draw the initial state
-        self.screen.fill((0, 0, 0))
+        self.screen.fill((255, 0, 0))
         draw_walls(self.screen, self.walls)
         draw_waypoint_segments(self.screen, self.points)
         # self.background = self.screen.copy()
@@ -198,25 +206,39 @@ class RacingEnv(gym.Env):
         draw_test_waypoints(self.screen, self.draw_waypoint_segments)
 
         # Draw other car
-        for i, car in enumerate(self.cars):
-            if i != agent_id:
-                # Draw the car
-                pygame.draw.circle(self.screen, (255, 0, 255), (int(car.position[0]), int(car.position[1])), 5)
+        # for i, car in enumerate(self.cars):
+        #     if i != agent_id:
+        #         # Draw the car
+        #         pygame.draw.circle(self.screen, (255, 0, 255), (int(car.position[0]), int(car.position[1])), 5)
+        #         arrow_length = 10
+        #         arrow_angle = self.state['headings'][i]
+        #         arrow_x = car.position[0] + arrow_length*np.cos(arrow_angle)
+        #         arrow_y = car.position[1] + arrow_length*np.sin(arrow_angle)
+        #         pygame.draw.line(self.screen, (255, 0, 255), car.position, (arrow_x, arrow_y), 3)
+                
         # Draw waypoint segments
         draw_waypoint_segments(self.screen, self.points)
         # Redraw the waypoints
-        draw_waypoints(self.screen, self.points, self.state['current_waypoints'][agent_id]-1, self.state['next_waypoints'][agent_id]-1)
+        draw_waypoints(self.screen, self.points, self.state['current_waypoints'][agent_id], self.state['next_waypoints'][agent_id])
 
         # Draw current car
         # Draw the car
         pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 5)
+        # Draw arrow to show heading and speed
+        arrow_length = 10
+        arrow_angle = self.state['headings'][agent_id]
+        arrow_x = car_pos[0] + arrow_length*np.cos(arrow_angle)
+        arrow_y = car_pos[1] + arrow_length*np.sin(arrow_angle)
+        pygame.draw.line(self.screen, (255, 255, 0), car_pos, (arrow_x, arrow_y), 3)
         # If you are behind the other car, draw a small circle on yourself to indicate that you are behind
         # if current_car_waypoint < other_car_waypoint or (current_car_waypoint == other_car_waypoint and cc_dist_to_next_waypoint > oc_dist_to_next_waypoint):
         if self.state['current_waypoints'][agent_id] < first_place_waypoint or (self.state['current_waypoints'][agent_id] == first_place_waypoint and any([self.state['distance_to_next_waypoints'][agent_id][0] > self.state['distance_to_next_waypoints'][cars_in_front[i]][0] for i in range(len(cars_in_front))])):
             pygame.draw.circle(self.screen, (0, 0, 0), (int(car_pos[0]), int(car_pos[1])), 2)
-        # if all(self.state['other_car_collisions'][1:]):
-        #     pygame.draw.circle(self.screen, (128, 128, 128), (int(car_pos[0]), int(car_pos[1])), 3)
+        if all(self.state['other_car_collisions'][1:]):
+            pygame.draw.circle(self.screen, (128, 128, 255), (int(car_pos[0]), int(car_pos[1])), 3)
 
+        # if agent_id == 0:
+        #     pygame.display.flip()
 
         # Get observation (maybe oversample and then downsample for better distance, but worse aliasing)
         oversample_size = observation_size
@@ -226,7 +248,7 @@ class RacingEnv(gym.Env):
         # observation = pygame.Surface((self.observation_size, self.observation_size))
         # observation.blit(self.screen, (0, 0), (car_pos[0] - self.observation_size / 2, car_pos[1] - self.observation_size / 2, self.observation_size, self.observation_size))
         # Rotate the surface according to the heading
-        observation = pygame.transform.rotate(observation, self.state['headings'][agent_id] * 180 / np.pi)
+        # observation = pygame.transform.rotate(observation, self.state['headings'][agent_id] * 180 / np.pi)
         # Flip the surface vertically
         observation = pygame.transform.flip(observation, True, False)
         obs_copy = observation.copy()
@@ -250,7 +272,6 @@ class RacingEnv(gym.Env):
         max_steps = self.max_steps
         num_agents = self.num_agents
         current_map = self.current_map
-        other_agent = self.other_agent
         evaluating = self.evaluating
         # Clear all self variables (except maps)
         self.__dict__.clear()
@@ -258,7 +279,8 @@ class RacingEnv(gym.Env):
         self.max_steps = max_steps
         self.num_agents = num_agents
         self.current_map = current_map
-        self.other_agent = other_agent
+        self.other_agent = PPO.load('../eval_models/temp_model.zip')
+        # self.other_agent = PPO.load('../eval_models/best_model.zip')
         self.observation_space = defineObservationSpace()
         self.action_space = defineActionSpace()
         self.evaluating = evaluating
@@ -269,6 +291,7 @@ class RacingEnv(gym.Env):
             self.current_map = self.maps[0]
         elif self.evaluating:
             self.current_map = self.maps[(self.maps.index(self.current_map) + 1) % len(self.maps)]
+            # self.other_agent = PPO.load('../eval_models/temp_model.zip')
         else:
             self.current_map = random_map
         self.setup()
@@ -290,12 +313,15 @@ class RacingEnv(gym.Env):
                 current_obs = self.observation(i)
                 # Add previous two observations to current observation (to get 9 channels)
                 three_stack_obs = np.concatenate((current_obs, self.state['previous_two_observations'][i][0], self.state['previous_two_observations'][i][1]), axis=0)
-                other_action, _states = model.predict(three_stack_obs.copy(), deterministic=True)
+                other_action, _states = model.predict(three_stack_obs.copy(), deterministic=False)
                 steer, throttle = other_action
 
                 # Update previous two observations
                 self.state['previous_two_observations'][i][0] = self.state['previous_two_observations'][i][1]
                 self.state['previous_two_observations'][i][1] = current_obs
+            # else:
+            #     if i != 0:
+            #         print("Not predicting for car", i, "because of collision")
             if not(self.state['other_car_collisions'][i]):
                 # Get new heading
                 new_heading = getNewHeading(self.state['headings'][i], steer)
@@ -321,7 +347,7 @@ class RacingEnv(gym.Env):
         # Update space
         self.space.step(1/FPS)
         # pygame.display.flip()
-        # self.clock.tick(FPS)
+        # self.clock.tick(30)
 
         # Update state
         for i, car in enumerate(self.cars):
@@ -436,8 +462,11 @@ class RacingEnv(gym.Env):
     def collisionBegin(self, arbiter, space, data):
         # If this is the first time the car has collided with this waypoint segment,
         # if arbiter.is_first_contact:
+        if self.steps_left == self.max_steps:
+            return False
         # Use the waypoint segment's index to determine which waypoint the car has passed through
         waypoint_index = self.waypoint_segments.index(arbiter.shapes[1])
+        # print("Collision with waypoint segment", waypoint_index)
         car_index = self.cars.index(arbiter.shapes[0].body)
 
         # print("Collision with waypoint segment", waypoint_index)
@@ -449,12 +478,12 @@ class RacingEnv(gym.Env):
                 living_agents = [i for i in range(self.num_agents) if not(self.state['other_car_collisions'][i])]
                 living_agents_in_same_waypoint = [i for i in living_agents if self.state['current_waypoints'][i] == self.state['current_waypoints'][0]]
                 # Multiply the reward by the fraction of living agents that are in the same waypoint (to encourage cooperation)
-                self.waypoint_reward *= len(living_agents_in_same_waypoint) / len(living_agents)
+                # self.waypoint_reward *= len(living_agents_in_same_waypoint) / len(living_agents)
             self.state['current_waypoints'][car_index] = waypoint_index
             self.state['next_waypoints'][car_index] = waypoint_index + 1
             self.state['steps_since_last_waypoints'][car_index] = 0
             # print(arbiter.shapes[0], arbiter.shapes[1])
-        return True
+        return False
     
     def collisionSeparate(self, arbiter, space, data):
         # print("Separation with waypoint segment", waypoint_index)
@@ -597,6 +626,9 @@ if __name__ == "__main__":
     # Load the pretrained model
     # pretrained_model = PPO.load('../eval_models/best_model_temp.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space}, device="cuda")
     pretrained_model = PPO("CnnPolicy", old_env, verbose=1, device="cuda")
+
+    # Save the pretrained model to temp_model.zip
+    pretrained_model.save('../eval_models/temp_model')
 
     # Initialize environment
     env = RacingEnv(maps, max_steps, num_agents, pretrained_model)

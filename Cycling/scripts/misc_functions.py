@@ -67,8 +67,8 @@ def getNewSpeed(speed, throttle, speed_limit):
 
     if new_speed > speed_limit:
         new_speed = speed_limit
-    elif new_speed < 20:
-        new_speed = 20
+    elif new_speed < 0:
+        new_speed = 0
     
     return new_speed
 
