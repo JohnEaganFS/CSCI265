@@ -16,8 +16,9 @@ filename = "best_model.zip"
 # filename = "temp_model.zip"
 
 if __name__ == "__main__":
-    maps = ["../maps/map_10_30_800_800.pkl"]#, "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
+    # maps = ["../maps/map_10_30_800_800.pkl"]#, "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
     # maps = ["../maps/map_30_50_800_800.pkl"]
+    maps = ["../maps/map_70_90_800_800.pkl"]
 
     # Define observation and action spaces
     # old_env = RacingEnvMaps(maps, max_steps)

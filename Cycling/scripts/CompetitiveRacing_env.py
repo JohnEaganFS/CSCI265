@@ -46,7 +46,7 @@ num_agents = 2
 n_envs = 1
 
 hyperparameters = {
-    'n_steps': 2048,
+    'n_steps': 4096,
     'batch_size': 1024,
     'gamma': 0.99,
     'vf_coef': 0.5,
@@ -111,6 +111,7 @@ class RacingEnv(gym.Env):
         self.speed_limit = 200
         self.waypoint_reward = 0
         self.collision_penalty = 0
+        self.collision_amount = 0
         self.reward_history = []
 
         # random_positions = self.points[0] + np.random.normal(0, 5, (self.num_agents, 2))
@@ -167,8 +168,8 @@ class RacingEnv(gym.Env):
             'current_waypoints': [0 for i in range(self.num_agents)],
             'next_waypoints': [1 for i in range(self.num_agents)],
             'steps_since_last_waypoints': [0 for i in range(self.num_agents)],
-            # 'in_waypoints': [[False for i in range(len(self.points) - 1)] for j in range(self.num_agents)],
-            'in_waypoints': [[True] + [False for i in range(len(self.points) - 2)] for j in range(self.num_agents)],
+            'in_waypoints': [[False for i in range(len(self.points) - 1)] for j in range(self.num_agents)],
+            # 'in_waypoints': [[True] + [False for i in range(len(self.points) - 2)] for j in range(self.num_agents)],
             'previous_two_observations': [[np.zeros((3, self.observation_size, self.observation_size)) for i in range(2)] for j in range(self.num_agents)],
             'other_car_collisions': [False for i in range(self.num_agents)],
             'previous_positions': [self.points[0] for i in range(self.num_agents)],
@@ -362,6 +363,7 @@ class RacingEnv(gym.Env):
 
         # Update steps left
         self.steps_left -= 1
+        # self.state['steps_since_last_waypoints'][0] += 1
 
         # If in an earlier waypoint than the other car or behind it, increment time step since last waypoint
         # current_car_waypoint = self.state['current_waypoints'][0]
@@ -383,7 +385,11 @@ class RacingEnv(gym.Env):
         self.waypoint_reward = 0
 
         # Check for wall collision penalty
-        # reward += self.collision_penalty
+        reward += self.collision_penalty
+        # if self.collision_penalty < 0:
+        #     self.collision_amount += 1
+            # print("hey")
+        self.collision_penalty = 0
 
         # Check for done
         checks = [
@@ -392,7 +398,7 @@ class RacingEnv(gym.Env):
             # Reached the end of the waypoints
             self.state['current_waypoints'][0] >= len(self.points) - 3,
             # Haven't passed through a waypoint in a while
-            self.state['steps_since_last_waypoints'][0] > 500,
+            self.state['steps_since_last_waypoints'][0] > 100,
             # Collision with wall
             self.collision_penalty < 0
         ]
@@ -509,14 +515,16 @@ class RacingEnv(gym.Env):
     def collisionBeginWalls(self, arbiter, space, data):
         car_index = self.cars.index(arbiter.shapes[0].body)
         # If first time step or in waypoint, ignore collision
-        print("Collision with wall")
         if self.steps_left == self.max_steps or any(self.state['in_waypoints'][car_index]):
-            self.state['speeds'][car_index] *= 0.5
-            return False
+            self.state['speeds'][car_index] = 0
+            # if car_index == 0:
+            #     self.collision_penalty = -1
+            return True
 
         if car_index == 0:
             num_waypoints_passed = max([1,self.state['current_waypoints'][car_index]])
             self.collision_penalty = -2.5 * num_waypoints_passed # FIX
+            # self.collision_penalty = -0.1
         else:
             self.state['other_car_collisions'][car_index] = True
             # Reset the other car to the current waypoint
@@ -538,7 +546,7 @@ class RacingEnv(gym.Env):
         car_index_2 = self.cars.index(car_2)
         self.state['speeds'][car_index_1] = 0
         self.state['speeds'][car_index_2] = 0
-        print("Collision with car")
+        # print("Collision with car")
         return True
 
     def collisionSeparateCar(self, arbiter, space, data):
@@ -635,8 +643,9 @@ class EveryUpdateCallback(BaseCallback):
 
 ### Main ###
 if __name__ == "__main__":
-    maps = ["../maps/map_10_30_800_800.pkl"]#, "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
+    # maps = ["../maps/map_10_30_800_800.pkl"]#, "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
     # maps = ["../maps/map_30_50_800_800.pkl"]
+    maps = ["../maps/map_70_90_800_800.pkl"]
 
     # Define observation and action spaces
     old_env = RacingEnv(maps, max_steps, num_agents)
@@ -676,7 +685,7 @@ if __name__ == "__main__":
     eval_env = VecFrameStack(eval_env, n_stack=3)
 
     # Callbacks
-    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=5000, deterministic=True, render=False, verbose=1, callback_on_new_best=CustomCallback(), callback_after_eval=EveryUpdateCallback())
+    eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=10000, deterministic=True, render=False, verbose=1, callback_on_new_best=CustomCallback(), callback_after_eval=EveryUpdateCallback())
 
     # Train model
     model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True)
