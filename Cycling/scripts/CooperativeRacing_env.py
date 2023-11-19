@@ -32,13 +32,12 @@ import pickle
 from misc_functions import *
 from read_gpx import read_gpx, removeDuplicatePoints, scaleData
 from RacingMaps_env import RacingEnv as RacingEnvMaps
-from CustomRacing2D_env import draw_waypoints
 
 ### Global Variables ###
 # Model parameters
 max_steps = 2000
 total_timesteps = 1000000
-observation_size = 128
+observation_size = 64
 num_agents = 2
 n_envs = 4
 
@@ -109,6 +108,7 @@ class RacingEnv(gym.Env):
         self.speed_limit = 200
         self.waypoint_reward = 0
         self.collision_penalty = 0
+        self.reward_history = []
 
         random_positions = self.points[0] + np.random.normal(0, 5, (self.num_agents, 2))
         # Add cars to the space
@@ -154,7 +154,8 @@ class RacingEnv(gym.Env):
         # Initialize state
         self.state = {
             'positions': [self.points[0] for i in range(self.num_agents)],
-            'headings': [np.arctan2(self.points[1][1] - self.cars[i].position[1], self.points[1][0] - self.cars[i].position[0]) for i in range(self.num_agents)],
+            # 'headings': [np.arctan2(self.points[1][1] - self.cars[i].position[1], self.points[1][0] - self.cars[i].position[0]) for i in range(self.num_agents)],
+            'headings': [np.random.uniform(-np.pi, np.pi) for i in range(self.num_agents)],
             'speeds': [0 for i in range(self.num_agents)],
             'current_waypoints': [0 for i in range(self.num_agents)],
             'next_waypoints': [1 for i in range(self.num_agents)],
@@ -189,30 +190,32 @@ class RacingEnv(gym.Env):
         # Load the background
         # self.screen.blit(self.background, (0, 0))
 
+        # Erase previous positions of cars
+        for i, car in enumerate(self.cars):
+            pygame.draw.circle(self.screen, (0, 0, 0), (int(self.state['previous_positions'][i][0]), int(self.state['previous_positions'][i][1])), 5)
+
+        # Draw the waypoint sections
+        draw_test_waypoints(self.screen, self.draw_waypoint_segments)
+
         # Draw other car
         for i, car in enumerate(self.cars):
             if i != agent_id:
-                # Erase previous position
-                pygame.draw.circle(self.screen, (0, 0, 0), (int(self.state['previous_positions'][i][0]), int(self.state['previous_positions'][i][1])), 5)
                 # Draw the car
                 pygame.draw.circle(self.screen, (255, 0, 255), (int(car.position[0]), int(car.position[1])), 5)
-        # draw_test_waypoints(self.screen, self.draw_waypoint_segments)
         # Draw waypoint segments
         draw_waypoint_segments(self.screen, self.points)
         # Redraw the waypoints
         draw_waypoints(self.screen, self.points, self.state['current_waypoints'][agent_id]-1, self.state['next_waypoints'][agent_id]-1)
 
         # Draw current car
-        # Erase previous position
-        pygame.draw.circle(self.screen, (0, 0, 0), (int(self.state['previous_positions'][agent_id][0]), int(self.state['previous_positions'][agent_id][1])), 5)
-        # Draw car as a chevron pointing in the direction of the heading
+        # Draw the car
         pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 5)
         # If you are behind the other car, draw a small circle on yourself to indicate that you are behind
         # if current_car_waypoint < other_car_waypoint or (current_car_waypoint == other_car_waypoint and cc_dist_to_next_waypoint > oc_dist_to_next_waypoint):
         if self.state['current_waypoints'][agent_id] < first_place_waypoint or (self.state['current_waypoints'][agent_id] == first_place_waypoint and any([self.state['distance_to_next_waypoints'][agent_id][0] > self.state['distance_to_next_waypoints'][cars_in_front[i]][0] for i in range(len(cars_in_front))])):
-            pygame.draw.circle(self.screen, (0, 0, 0), (int(car_pos[0]), int(car_pos[1])), 3)
-        if all(self.state['other_car_collisions'][1:]):
-            pygame.draw.circle(self.screen, (128, 128, 128), (int(car_pos[0]), int(car_pos[1])), 3)
+            pygame.draw.circle(self.screen, (0, 0, 0), (int(car_pos[0]), int(car_pos[1])), 2)
+        # if all(self.state['other_car_collisions'][1:]):
+        #     pygame.draw.circle(self.screen, (128, 128, 128), (int(car_pos[0]), int(car_pos[1])), 3)
 
 
         # Get observation (maybe oversample and then downsample for better distance, but worse aliasing)
@@ -348,7 +351,7 @@ class RacingEnv(gym.Env):
         self.waypoint_reward = 0
 
         # Check for wall collision penalty
-        reward += self.collision_penalty
+        # reward += self.collision_penalty
 
         # Check for done
         checks = [
@@ -367,8 +370,12 @@ class RacingEnv(gym.Env):
         #     print(checks)
 
         # if checks[2] or checks[0]:
-        if checks[0] or checks[2]:
-            reward -= max([10, 4 * self.state['current_waypoints'][0]])
+        if checks[0] or checks[2] or checks[3]:
+            # If run out of steps or haven't passed through a waypoint in a while, penalize the agent by removing the reward gained from passing through waypoints
+            total_reward = sum(self.reward_history)
+            # print("Total reward:", total_reward)
+            if total_reward > 0:
+                reward -= total_reward * 0.5
         # elif checks[1]:
         #     reward += 100
 
@@ -376,6 +383,9 @@ class RacingEnv(gym.Env):
 
         # if abs(reward) > 0.01:
         #     print("Reward:", reward)
+
+        # Update reward history
+        self.reward_history.append(reward)
 
         # Return observation, reward, done, info
         return observation, reward, done, {}
@@ -436,6 +446,10 @@ class RacingEnv(gym.Env):
         if waypoint_index > self.state['current_waypoints'][car_index]:
             if car_index == 0:
                 self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoints'][car_index])
+                living_agents = [i for i in range(self.num_agents) if not(self.state['other_car_collisions'][i])]
+                living_agents_in_same_waypoint = [i for i in living_agents if self.state['current_waypoints'][i] == self.state['current_waypoints'][0]]
+                # Multiply the reward by the fraction of living agents that are in the same waypoint (to encourage cooperation)
+                self.waypoint_reward *= len(living_agents_in_same_waypoint) / len(living_agents)
             self.state['current_waypoints'][car_index] = waypoint_index
             self.state['next_waypoints'][car_index] = waypoint_index + 1
             self.state['steps_since_last_waypoints'][car_index] = 0
@@ -570,7 +584,7 @@ class EveryUpdateCallback(BaseCallback):
 
 ### Main ###
 if __name__ == "__main__":
-    maps = ["../maps/map_10_30_800_800.pkl", "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
+    maps = ["../maps/map_10_30_800_800.pkl"]#, "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
     # maps = ["../maps/map_30_50_800_800.pkl"]
 
     # Define observation and action spaces

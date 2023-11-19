@@ -22,8 +22,23 @@ def draw_waypoint_segments(screen, points):
 
 def draw_test_waypoints(screen, points):
     for p1, p2, p3, p4 in points:
-        random_color = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
-        pygame.draw.polygon(screen, random_color, (p1, p2, p3, p4))
+        pygame.draw.polygon(screen, (128,128,128), (p1, p2, p3, p4))
+
+def draw_waypoints(screen, waypoints, current_waypoint, next_waypoint):
+    for i, waypoint in enumerate(waypoints):
+        # Make the current waypoint red
+        if i == current_waypoint:
+            color = (0, 0, 255)
+        # Make the next waypoint green
+        elif i == next_waypoint:
+            color = (0, 255, 0)
+        # Make completed waypoints blue
+        elif i < current_waypoint:
+            color = (0, 0, 255)
+        # Make future waypoints white
+        else:
+            color = (255, 255, 255)
+        pygame.draw.circle(screen, color, (int(waypoint[0]), int(waypoint[1])), 4)
 
 def getNewHeading(heading_angle, steering_angle):
     '''
