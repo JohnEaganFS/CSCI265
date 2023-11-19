@@ -16,12 +16,16 @@ def draw_walls(screen, pl_set):
         # Draw filled polygon (each pl is a list of points)
         pygame.draw.polygon(screen, (255, 0, 0), pl)
 
-def draw_waypoint_segments(screen, points):
+def draw_waypoint_segments(screen, points, current_waypoint, next_waypoint):
     for i in range(len(points) - 1):
-        pygame.draw.line(screen, (255, 255, 255), points[i], points[i + 1], 4)
+        if i == current_waypoint:
+            color = (255, 0, 255)
+        else:
+            color = (255, 255, 255)
+        pygame.draw.line(screen, color, points[i], points[i + 1], 4)
 
 def draw_test_waypoints(screen, points):
-    for p1, p2, p3, p4 in points:
+    for i, (p1, p2, p3, p4) in enumerate(points):
         pygame.draw.polygon(screen, (128,128,128), (p1, p2, p3, p4))
 
 def draw_waypoints(screen, waypoints, current_waypoint, next_waypoint):
@@ -67,8 +71,8 @@ def getNewSpeed(speed, throttle, speed_limit):
 
     if new_speed > speed_limit:
         new_speed = speed_limit
-    elif new_speed < 0:
-        new_speed = 0
+    elif new_speed < 30:
+        new_speed = 30
     
     return new_speed
 
