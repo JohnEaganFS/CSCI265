@@ -509,8 +509,10 @@ class RacingEnv(gym.Env):
     def collisionBeginWalls(self, arbiter, space, data):
         car_index = self.cars.index(arbiter.shapes[0].body)
         # If first time step or in waypoint, ignore collision
+        print("Collision with wall")
         if self.steps_left == self.max_steps or any(self.state['in_waypoints'][car_index]):
-            return True
+            self.state['speeds'][car_index] *= 0.5
+            return False
 
         if car_index == 0:
             num_waypoints_passed = max([1,self.state['current_waypoints'][car_index]])
