@@ -79,7 +79,7 @@ def getNewSpeed(speed, throttle, speed_limit):
 def create_car(pos):
     car = pymunk.Body(10, 1, body_type=pymunk.Body.DYNAMIC)
     car.position = (pos[0], pos[1])
-    car_shape = pymunk.Circle(car, 2)
+    car_shape = pymunk.Circle(car, 5)
     car_shape.elasticity = 1
     car_shape.collision_type = 1
     return car, car_shape

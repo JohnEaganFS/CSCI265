@@ -212,7 +212,7 @@ class RacingEnv(gym.Env):
             if i != agent_id:
                 # Draw the car
                 pygame.draw.circle(self.screen, (0, 255, 255), (int(car.position[0]), int(car.position[1])), 5)
-                arrow_length = 10
+                arrow_length = max([35 * self.state['speeds'][i] / self.speed_limit, 10])
                 arrow_angle = self.state['headings'][i]
                 arrow_x = car.position[0] + arrow_length*np.cos(arrow_angle)
                 arrow_y = car.position[1] + arrow_length*np.sin(arrow_angle)
@@ -390,7 +390,7 @@ class RacingEnv(gym.Env):
             # Run out of steps
             self.steps_left <= 0,
             # Reached the end of the waypoints
-            self.state['current_waypoints'][0] >= len(self.points) - 2,
+            self.state['current_waypoints'][0] >= len(self.points) - 3,
             # Haven't passed through a waypoint in a while
             self.state['steps_since_last_waypoints'][0] > 500,
             # Collision with wall
@@ -531,7 +531,15 @@ class RacingEnv(gym.Env):
     
     def collisionBeginCar(self, arbiter, space, data):
         # Don't process collisions between cars
-        return False
+        # Half the speed of both cars
+        car_1 = arbiter.shapes[0].body
+        car_2 = arbiter.shapes[1].body
+        car_index_1 = self.cars.index(car_1)
+        car_index_2 = self.cars.index(car_2)
+        self.state['speeds'][car_index_1] = 0
+        self.state['speeds'][car_index_2] = 0
+        print("Collision with car")
+        return True
 
     def collisionSeparateCar(self, arbiter, space, data):
         return True
@@ -553,7 +561,7 @@ def playNEpisodes(n, env, model, max_steps=1000):
             total_reward += reward
 
             pygame.display.update()
-            # pygame.time.Clock().tick(10)
+            pygame.time.Clock().tick(120)
 
             if done:
                 print(f'Episode {episode} finished after {step} steps with reward {total_reward}')
