@@ -490,11 +490,21 @@ class RacingEnv(gym.Env):
 
         if waypoint_index > self.state['current_waypoints'][car_index]:
             if car_index == 0:
-                self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoints'][car_index])
-                living_agents = [i for i in range(self.num_agents) if not(self.state['other_car_collisions'][i])]
-                living_agents_in_same_waypoint = [i for i in living_agents if self.state['current_waypoints'][i] == self.state['current_waypoints'][0]]
-                # Multiply the reward by the fraction of living agents that are in the same waypoint (to encourage cooperation)
-                # self.waypoint_reward *= len(living_agents_in_same_waypoint) / len(living_agents)
+                # Sort the cars by distance to next waypoint
+                self.state['distance_to_next_waypoints'].sort(key=lambda x: x[0])
+                # Get the first place car's waypoint
+                first_place_waypoint = max(self.state['current_waypoints'])
+                cars_in_front = [i for i in range(self.num_agents) if self.state['current_waypoints'][i] == first_place_waypoint]
+
+                # If you are in first place, reward yourself
+                if not(self.state['current_waypoints'][0] < first_place_waypoint or (self.state['current_waypoints'][0] == first_place_waypoint and any([self.state['distance_to_next_waypoints'][0][0] > self.state['distance_to_next_waypoints'][cars_in_front[i]][0] for i in range(len(cars_in_front))]))):
+                    self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoints'][car_index])
+                else:
+                    self.waypoint_reward = 2.5 * (waypoint_index - self.state['current_waypoints'][car_index])
+                # living_agents = [i for i in range(self.num_agents) if not(self.state['other_car_collisions'][i])]
+                # living_agents_in_same_waypoint = [i for i in living_agents if self.state['current_waypoints'][i] == self.state['current_waypoints'][0]]
+                # # Multiply the reward by the fraction of living agents that are in the same waypoint (to encourage cooperation)
+                # # self.waypoint_reward *= len(living_agents_in_same_waypoint) / len(living_agents)
             self.state['current_waypoints'][car_index] = waypoint_index
             self.state['next_waypoints'][car_index] = waypoint_index + 1
             self.state['steps_since_last_waypoints'][car_index] = 0
@@ -523,7 +533,8 @@ class RacingEnv(gym.Env):
 
         if car_index == 0:
             num_waypoints_passed = max([1,self.state['current_waypoints'][car_index]])
-            self.collision_penalty = -2.5 * num_waypoints_passed # FIX
+            # self.collision_penalty = -2.5 * num_waypoints_passed # FIX
+            self.collision_penalty = -1
             # self.collision_penalty = -0.1
         else:
             self.state['other_car_collisions'][car_index] = True
@@ -569,7 +580,7 @@ def playNEpisodes(n, env, model, max_steps=1000):
             total_reward += reward
 
             pygame.display.update()
-            pygame.time.Clock().tick(120)
+            # pygame.time.Clock().tick(120)
 
             if done:
                 print(f'Episode {episode} finished after {step} steps with reward {total_reward}')
