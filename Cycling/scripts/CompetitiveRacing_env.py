@@ -518,8 +518,10 @@ class RacingEnv(gym.Env):
                 # If you are in first place, reward yourself
                 if not(behind):
                     self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoints'][car_index])
+                    # print("Got 5 reward!")
                 else:
                     self.waypoint_reward = 2.5 * (waypoint_index - self.state['current_waypoints'][car_index])
+                    # print("Got 2.5 reward!")
                 # living_agents = [i for i in range(self.num_agents) if not(self.state['other_car_collisions'][i])]
                 # living_agents_in_same_waypoint = [i for i in living_agents if self.state['current_waypoints'][i] == self.state['current_waypoints'][0]]
                 # # Multiply the reward by the fraction of living agents that are in the same waypoint (to encourage cooperation)
@@ -554,6 +556,7 @@ class RacingEnv(gym.Env):
             num_waypoints_passed = max([1,self.state['current_waypoints'][car_index]])
             # self.collision_penalty = -2.5 * num_waypoints_passed # FIX
             self.collision_penalty = -1
+            print("hey")
             # self.collision_penalty = -0.1
         else:
             self.state['other_car_collisions'][car_index] = True

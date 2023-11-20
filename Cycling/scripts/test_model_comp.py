@@ -11,7 +11,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecFrameStack
 
 max_steps = 2000
-num_agents = 2
+num_agents = 1
 # filename = "best_model.zip"
 filename = "temp_model.zip"
 
