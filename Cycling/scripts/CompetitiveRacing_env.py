@@ -25,7 +25,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env import VecFrameStack
-from stable_baselines3.common.callbacks import EvalCallback, ProgressBarCallback, BaseCallback
+from stable_baselines3.common.callbacks import EvalCallback, ProgressBarCallback, BaseCallback, CheckpointCallback
 
 # Simulation (pygame, pymunk)
 import pygame
@@ -192,11 +192,14 @@ class RacingEnv(gym.Env):
 
     def observation(self, agent_id=0): # Make draw functions dependent on agent_id
         car_pos = self.state['positions'][agent_id]
-        # Sort the cars by distance to next waypoint
-        self.state['distance_to_next_waypoints'].sort(key=lambda x: x[0])
+
         # Get the first place car's waypoint
         first_place_waypoint = max(self.state['current_waypoints'])
         cars_in_front = [i for i in range(self.num_agents) if self.state['current_waypoints'][i] == first_place_waypoint]
+        first_place_cars_dist_to_next_waypoint = [self.state['distance_to_next_waypoints'][i] for i in range(len(cars_in_front))]
+        smallest_dist = min(first_place_cars_dist_to_next_waypoint)
+        current_car_dist_to_next_waypoint = self.state['distance_to_next_waypoints'][agent_id]
+        behind = self.state['current_waypoints'][agent_id] < first_place_waypoint or (self.state['current_waypoints'][agent_id] == first_place_waypoint and current_car_dist_to_next_waypoint > smallest_dist)
 
         # Load the background
         # self.screen.blit(self.background, (0, 0))
@@ -236,7 +239,7 @@ class RacingEnv(gym.Env):
         pygame.draw.line(self.screen, (255, 255, 0), car_pos, (arrow_x, arrow_y), 3)
         # If you are behind the other car, draw a small circle on yourself to indicate that you are behind
         # if current_car_waypoint < other_car_waypoint or (current_car_waypoint == other_car_waypoint and cc_dist_to_next_waypoint > oc_dist_to_next_waypoint):
-        if self.state['current_waypoints'][agent_id] < first_place_waypoint or (self.state['current_waypoints'][agent_id] == first_place_waypoint and any([self.state['distance_to_next_waypoints'][agent_id][0] > self.state['distance_to_next_waypoints'][cars_in_front[i]][0] for i in range(len(cars_in_front))])):
+        if behind:
             pygame.draw.circle(self.screen, (0, 0, 0), (int(car_pos[0]), int(car_pos[1])), 2)
         if all(self.state['other_car_collisions'][1:]):
             pygame.draw.circle(self.screen, (128, 128, 255), (int(car_pos[0]), int(car_pos[1])), 3)
@@ -314,7 +317,7 @@ class RacingEnv(gym.Env):
         reward = -0.01
 
         model = self.other_agent
-        self.state['distance_to_next_waypoints'] = [(np.linalg.norm(self.points[self.state['next_waypoints'][i]] - self.cars[i].position), i) for i in range(self.num_agents)]
+        self.state['distance_to_next_waypoints'] = [(abs(np.linalg.norm(self.points[self.state['next_waypoints'][i]] - self.cars[i].position)), i) for i in range(self.num_agents)]
 
         # For each car,
         for i, car in enumerate(self.cars):
@@ -348,14 +351,21 @@ class RacingEnv(gym.Env):
                 # Update car velocity
                 car.velocity = (self.state['speeds'][i]*np.cos(self.state['headings'][i]), self.state['speeds'][i]*np.sin(self.state['headings'][i]))
 
-                # If close to the other car, gain a velocity bonus because of drafting
-                # if abs(distance_to_other_car) < 20:
-                #     self.speed_limit = 200
-                #     reward = 0
-                # else:
-                #     if self.speed_limit > 30:
-                #         self.speed_limit = max([30, self.speed_limit * 0.99])
-                    # car.velocity = (car.velocity[0] * 2, car.velocity[1] * 2)
+                # Get the first place car's waypoint
+                first_place_waypoint = max(self.state['current_waypoints'])
+                cars_in_front = [i for i in range(self.num_agents) if self.state['current_waypoints'][i] == first_place_waypoint]
+                first_place_cars_dist_to_next_waypoint = [self.state['distance_to_next_waypoints'][i] for i in range(len(cars_in_front))]
+                smallest_dist = min(first_place_cars_dist_to_next_waypoint)
+                current_car_dist_to_next_waypoint = self.state['distance_to_next_waypoints'][i]
+
+                dist_to_other_car = abs(np.linalg.norm(self.cars[0].position - self.cars[i].position))
+
+                # If you are behind the other car, gain drafting speed
+                behind = self.state['current_waypoints'][i] < first_place_waypoint or (self.state['current_waypoints'][i] == first_place_waypoint and current_car_dist_to_next_waypoint > smallest_dist)
+                if behind and dist_to_other_car < 30:
+                    # print("Agent", i, "is drafting")
+                    car.velocity *= 1.2
+
 
         # if self.speed_limit > 30 and abs(distance_to_other_car) > 20:
         #     print("Speed limit:", self.speed_limit)
@@ -497,14 +507,16 @@ class RacingEnv(gym.Env):
 
         if waypoint_index > self.state['current_waypoints'][car_index]:
             if car_index == 0:
-                # Sort the cars by distance to next waypoint
-                self.state['distance_to_next_waypoints'].sort(key=lambda x: x[0])
                 # Get the first place car's waypoint
                 first_place_waypoint = max(self.state['current_waypoints'])
                 cars_in_front = [i for i in range(self.num_agents) if self.state['current_waypoints'][i] == first_place_waypoint]
+                first_place_cars_dist_to_next_waypoint = [self.state['distance_to_next_waypoints'][i] for i in range(len(cars_in_front))]
+                smallest_dist = min(first_place_cars_dist_to_next_waypoint)
+                current_car_dist_to_next_waypoint = self.state['distance_to_next_waypoints'][car_index]
+                behind = self.state['current_waypoints'][car_index] < first_place_waypoint or (self.state['current_waypoints'][car_index] == first_place_waypoint and current_car_dist_to_next_waypoint > smallest_dist)
 
                 # If you are in first place, reward yourself
-                if not(self.state['current_waypoints'][0] < first_place_waypoint or (self.state['current_waypoints'][0] == first_place_waypoint and any([self.state['distance_to_next_waypoints'][0][0] > self.state['distance_to_next_waypoints'][cars_in_front[i]][0] for i in range(len(cars_in_front))]))):
+                if not(behind):
                     self.waypoint_reward = 5 * (waypoint_index - self.state['current_waypoints'][car_index])
                 else:
                     self.waypoint_reward = 2.5 * (waypoint_index - self.state['current_waypoints'][car_index])
@@ -587,7 +599,7 @@ def playNEpisodes(n, env, model, max_steps=1000):
             total_reward += reward
 
             pygame.display.update()
-            # pygame.time.Clock().tick(120)
+            pygame.time.Clock().tick(20)
 
             if done:
                 print(f'Episode {episode} finished after {step} steps with reward {total_reward}')
@@ -704,8 +716,9 @@ if __name__ == "__main__":
 
     # Callbacks
     eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=10000, deterministic=True, render=False, verbose=1, callback_on_new_best=CustomCallback(), callback_after_eval=EveryUpdateCallback())
+    checkpoint_callback = CheckpointCallback(save_freq=10000, save_path='../eval_models/checkpoints/', name_prefix='comp_model')
 
     # Train model
-    model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True, tb_log_name="run_1")
+    model.learn(total_timesteps=total_timesteps, callback=[eval_callback, checkpoint_callback], progress_bar=True, tb_log_name="run_1")
 
     print("Hello, world!")
