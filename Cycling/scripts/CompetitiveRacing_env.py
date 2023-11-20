@@ -42,7 +42,7 @@ from RacingMaps_env import RacingEnv as RacingEnvMaps
 max_steps = 2000
 total_timesteps = 1000000
 observation_size = 64
-num_agents = 2
+num_agents = 1
 n_envs = 1
 
 hyperparameters = {
