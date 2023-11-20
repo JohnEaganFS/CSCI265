@@ -288,8 +288,8 @@ class RacingEnv(gym.Env):
             self.other_agent = PPO.load('../eval_models/' + model_filename)
             # self.other_agent = PPO.load('../eval_models/good_models/comp_model.zip')
         else:
-            self.other_agent = other_agent
-            # self.other_agent = PPO.load('../eval_models/temp_model.zip')
+            # self.other_agent = other_agent
+            self.other_agent = PPO.load('../eval_models/temp_model.zip')
         self.observation_space = defineObservationSpace()
         self.action_space = defineActionSpace()
         self.evaluating = evaluating
@@ -693,8 +693,8 @@ if __name__ == "__main__":
     # )
 
     # Create model
-    # model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda", **hyperparameters)
-    model = PPO.load('../eval_models/best_model.zip', env=vec_env, device="cuda", **hyperparameters)
+    model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda", **hyperparameters, tensorboard_log="../logs/")
+    # model = PPO.load('../eval_models/best_model.zip', env=vec_env, device="cuda", **hyperparameters, tensorboard_log="../logs/")
     # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback envs
@@ -706,6 +706,6 @@ if __name__ == "__main__":
     eval_callback = EvalCallback(eval_env, best_model_save_path='../eval_models/', log_path='../logs/', eval_freq=10000, deterministic=True, render=False, verbose=1, callback_on_new_best=CustomCallback(), callback_after_eval=EveryUpdateCallback())
 
     # Train model
-    model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True)
+    model.learn(total_timesteps=total_timesteps, callback=eval_callback, progress_bar=True, tb_log_name="run_1")
 
     print("Hello, world!")
