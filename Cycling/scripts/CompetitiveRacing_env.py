@@ -42,7 +42,7 @@ from RacingMaps_env import RacingEnv as RacingEnvMaps
 max_steps = 2000
 total_timesteps = 1000000
 observation_size = 64
-num_agents = 1
+num_agents = 2
 n_envs = 1
 
 hyperparameters = {
@@ -351,20 +351,20 @@ class RacingEnv(gym.Env):
                 # Update car velocity
                 car.velocity = (self.state['speeds'][i]*np.cos(self.state['headings'][i]), self.state['speeds'][i]*np.sin(self.state['headings'][i]))
 
-                # Get the first place car's waypoint
-                first_place_waypoint = max(self.state['current_waypoints'])
-                cars_in_front = [i for i in range(self.num_agents) if self.state['current_waypoints'][i] == first_place_waypoint]
-                first_place_cars_dist_to_next_waypoint = [self.state['distance_to_next_waypoints'][i] for i in range(len(cars_in_front))]
-                smallest_dist = min(first_place_cars_dist_to_next_waypoint)
-                current_car_dist_to_next_waypoint = self.state['distance_to_next_waypoints'][i]
+                # # Get the first place car's waypoint
+                # first_place_waypoint = max(self.state['current_waypoints'])
+                # cars_in_front = [i for i in range(self.num_agents) if self.state['current_waypoints'][i] == first_place_waypoint]
+                # first_place_cars_dist_to_next_waypoint = [self.state['distance_to_next_waypoints'][i] for i in range(len(cars_in_front))]
+                # smallest_dist = min(first_place_cars_dist_to_next_waypoint)
+                # current_car_dist_to_next_waypoint = self.state['distance_to_next_waypoints'][i]
 
-                dist_to_other_car = abs(np.linalg.norm(self.cars[0].position - self.cars[i].position))
+                # dist_to_other_car = abs(np.linalg.norm(self.cars[0].position - self.cars[i].position))
 
-                # If you are behind the other car, gain drafting speed
-                behind = self.state['current_waypoints'][i] < first_place_waypoint or (self.state['current_waypoints'][i] == first_place_waypoint and current_car_dist_to_next_waypoint > smallest_dist)
-                if behind and dist_to_other_car < 30:
-                    # print("Agent", i, "is drafting")
-                    car.velocity *= 1.2
+                # # If you are behind the other car, gain drafting speed
+                # behind = self.state['current_waypoints'][i] < first_place_waypoint or (self.state['current_waypoints'][i] == first_place_waypoint and current_car_dist_to_next_waypoint > smallest_dist)
+                # if behind and dist_to_other_car < 30:
+                #     # print("Agent", i, "is drafting")
+                #     car.velocity *= 1.2
 
 
         # if self.speed_limit > 30 and abs(distance_to_other_car) > 20:
@@ -722,6 +722,6 @@ if __name__ == "__main__":
     checkpoint_callback = CheckpointCallback(save_freq=10000, save_path='../eval_models/checkpoints/', name_prefix='comp_model')
 
     # Train model
-    model.learn(total_timesteps=total_timesteps, callback=[eval_callback, checkpoint_callback], progress_bar=True, tb_log_name="run_1")
+    model.learn(total_timesteps=total_timesteps, callback=[eval_callback, checkpoint_callback], progress_bar=True, tb_log_name="multi_no_draft")
 
     print("Hello, world!")
