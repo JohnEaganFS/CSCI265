@@ -599,7 +599,7 @@ def playNEpisodes(n, env, model, max_steps=1000):
             total_reward += reward
 
             pygame.display.update()
-            pygame.time.Clock().tick(20)
+            # pygame.time.Clock().tick(20)
 
             if done:
                 print(f'Episode {episode} finished after {step} steps with reward {total_reward}')
