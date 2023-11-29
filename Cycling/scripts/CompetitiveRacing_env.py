@@ -263,7 +263,7 @@ class RacingEnv(gym.Env):
         observation = pygame.surfarray.pixels3d(observation)
 
         # Randomly (approximately every 20 frames) do this
-        # if np.random.randint(0, 20) == 0:
+        # if np.random.randint(0, 50) == 0 and agent_id == 0:
         #     print("Agent", agent_id)
         #     plt.imshow(observation)
         #     plt.show()
@@ -331,7 +331,7 @@ class RacingEnv(gym.Env):
                 three_stack_obs = np.concatenate((self.state['previous_two_observations'][i][0], self.state['previous_two_observations'][i][1], current_obs), axis=0)
                 # three_stack_obs = current_obs
 
-                other_action, _states = model.predict(three_stack_obs.copy(), deterministic=True)
+                other_action, _states = model.predict(three_stack_obs.copy(), deterministic=False)
                 steer, throttle = other_action
                 # print("Action:", other_action)
 
@@ -351,20 +351,20 @@ class RacingEnv(gym.Env):
                 # Update car velocity
                 car.velocity = (self.state['speeds'][i]*np.cos(self.state['headings'][i]), self.state['speeds'][i]*np.sin(self.state['headings'][i]))
 
-                # # Get the first place car's waypoint
-                # first_place_waypoint = max(self.state['current_waypoints'])
-                # cars_in_front = [i for i in range(self.num_agents) if self.state['current_waypoints'][i] == first_place_waypoint]
-                # first_place_cars_dist_to_next_waypoint = [self.state['distance_to_next_waypoints'][i] for i in range(len(cars_in_front))]
-                # smallest_dist = min(first_place_cars_dist_to_next_waypoint)
-                # current_car_dist_to_next_waypoint = self.state['distance_to_next_waypoints'][i]
+                # Get the first place car's waypoint
+                first_place_waypoint = max(self.state['current_waypoints'])
+                cars_in_front = [i for i in range(self.num_agents) if self.state['current_waypoints'][i] == first_place_waypoint]
+                first_place_cars_dist_to_next_waypoint = [self.state['distance_to_next_waypoints'][i] for i in range(len(cars_in_front))]
+                smallest_dist = min(first_place_cars_dist_to_next_waypoint)
+                current_car_dist_to_next_waypoint = self.state['distance_to_next_waypoints'][i]
 
-                # dist_to_other_car = abs(np.linalg.norm(self.cars[0].position - self.cars[i].position))
+                dist_to_other_car = abs(np.linalg.norm(self.cars[0].position - self.cars[i].position))
 
-                # # If you are behind the other car, gain drafting speed
-                # behind = self.state['current_waypoints'][i] < first_place_waypoint or (self.state['current_waypoints'][i] == first_place_waypoint and current_car_dist_to_next_waypoint > smallest_dist)
-                # if behind and dist_to_other_car < 30:
-                #     # print("Agent", i, "is drafting")
-                #     car.velocity *= 1.2
+                # If you are behind the other car, gain drafting speed
+                behind = self.state['current_waypoints'][i] < first_place_waypoint or (self.state['current_waypoints'][i] == first_place_waypoint and current_car_dist_to_next_waypoint > smallest_dist)
+                if behind and dist_to_other_car < 30:
+                    # print("Agent", i, "is drafting")
+                    car.velocity *= 1.2
 
 
         # if self.speed_limit > 30 and abs(distance_to_other_car) > 20:
@@ -556,7 +556,6 @@ class RacingEnv(gym.Env):
             num_waypoints_passed = max([1,self.state['current_waypoints'][car_index]])
             # self.collision_penalty = -2.5 * num_waypoints_passed # FIX
             self.collision_penalty = -1
-            print("hey")
             # self.collision_penalty = -0.1
         else:
             self.state['other_car_collisions'][car_index] = True
@@ -596,13 +595,13 @@ def playNEpisodes(n, env, model, max_steps=1000):
             obs = env.reset()
         total_reward = 0
         for step in range(max_steps):
-            action, _states = model.predict(obs.copy(), deterministic=True)
+            action, _states = model.predict(obs.copy(), deterministic=False)
             # print("Action:", action)
             obs, reward, done, info = env.step(action)
             total_reward += reward
 
             pygame.display.update()
-            # pygame.time.Clock().tick(20)
+            # pygame.time.Clock().tick(100)
 
             if done:
                 print(f'Episode {episode} finished after {step} steps with reward {total_reward}')

@@ -10,10 +10,29 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecFrameStack
 
+# Agent timestep selection
+
+# Single-Agent
+agent_1 = 630000
+filename = "/checkpoints_single_agent/comp_model_" + str(agent_1) + "_steps.zip"
+other_agent_filename = "/checkpoints_single_agent/comp_model_" + str(agent_1) + "_steps.zip"
+num_agents = 1
+
+# Multi-Agent (No Draft)
+# filename = "/good_models/comp_wait_strat.zip"
+# other_agent_filename = "/good_models/comp_wait_strat.zip"
+# num_agents = 2
+
+
+# Multi-Agent (Draft)
+# agent_1 = 800000
+# agent_2 = 800000
+# filename = "/checkpoints_run2/comp_model_" + str(agent_1) + "_steps.zip"
+# other_agent_filename = "/checkpoints_run2/comp_model_" + str(agent_2) + "_steps.zip"
+# num_agents = 2
+
+
 max_steps = 2000
-num_agents = 2
-# filename = "best_model.zip"
-filename = "temp_model.zip"
 
 if __name__ == "__main__":
     # maps = ["../maps/map_10_30_800_800.pkl"]#, "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
@@ -32,7 +51,7 @@ if __name__ == "__main__":
     pretrained_model = PPO.load('../eval_models/' + filename)
 
     # Create environment
-    env = RacingEnv(maps, max_steps, num_agents, pretrained_model, evaluating=True, model_filename=filename)
+    env = RacingEnv(maps, max_steps, num_agents, pretrained_model, evaluating=True, model_filename=other_agent_filename)
     env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
     env = VecFrameStack(env, n_stack=3)
 
