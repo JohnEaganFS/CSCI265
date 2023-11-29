@@ -13,10 +13,10 @@ from stable_baselines3.common.vec_env import VecFrameStack
 # Agent timestep selection
 
 # Single-Agent
-agent_1 = 630000
-filename = "/checkpoints_single_agent/comp_model_" + str(agent_1) + "_steps.zip"
-other_agent_filename = "/checkpoints_single_agent/comp_model_" + str(agent_1) + "_steps.zip"
-num_agents = 1
+# agent_1 = 630000
+# filename = "/checkpoints_single_agent/comp_model_" + str(agent_1) + "_steps.zip"
+# other_agent_filename = "/checkpoints_single_agent/comp_model_" + str(agent_1) + "_steps.zip"
+# num_agents = 1
 
 # Multi-Agent (No Draft)
 # filename = "/good_models/comp_wait_strat.zip"
@@ -25,11 +25,11 @@ num_agents = 1
 
 
 # Multi-Agent (Draft)
-# agent_1 = 800000
-# agent_2 = 800000
-# filename = "/checkpoints_run2/comp_model_" + str(agent_1) + "_steps.zip"
-# other_agent_filename = "/checkpoints_run2/comp_model_" + str(agent_2) + "_steps.zip"
-# num_agents = 2
+agent_1 = 800000
+agent_2 = 800000
+filename = "/checkpoints_run2/comp_model_" + str(agent_1) + "_steps.zip"
+other_agent_filename = "/checkpoints_run2/comp_model_" + str(agent_2) + "_steps.zip"
+num_agents = 2
 
 
 max_steps = 2000
@@ -40,18 +40,18 @@ if __name__ == "__main__":
     maps = ["../maps/map_70_90_800_800.pkl"] # good one
 
     # Define observation and action spaces
-    # old_env = RacingEnvMaps(maps, max_steps)
-    # old_env = make_vec_env(lambda: old_env, n_envs=1, seed=np.random.randint(0, 10000))
-    # old_env = VecFrameStack(old_env, n_stack=3)
-    # observation_space = old_env.observation_space
-    # action_space = old_env.action_space
+    old_env = RacingEnvMaps(maps, max_steps)
+    old_env = make_vec_env(lambda: old_env, n_envs=1, seed=np.random.randint(0, 10000))
+    old_env = VecFrameStack(old_env, n_stack=3)
+    observation_space = old_env.observation_space
+    action_space = old_env.action_space
 
     # Load the pretrained model
     # pretrained_model = PPO.load('../eval_models/best_cooperative.zip')#, env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
-    pretrained_model = PPO.load('../eval_models/' + filename)
+    pretrained_model = PPO.load('../eval_models/' + filename, env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space})
 
     # Create environment
-    env = RacingEnv(maps, max_steps, num_agents, pretrained_model, evaluating=True, model_filename=other_agent_filename)
+    env = RacingEnv(maps, max_steps, num_agents, pretrained_model, evaluating=True, model_filename=other_agent_filename, obs_space_temp=observation_space, act_space_temp=action_space)
     env = make_vec_env(lambda: env, n_envs=1, seed=np.random.randint(0, 10000))
     env = VecFrameStack(env, n_stack=3)
 
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     # model = PPO.load("../eval_models/best_model.zip", env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
     # model = PPO.load("../eval_models/temp_model.zip", env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
     # model = PPO.load('../eval_models/best_cooperative.zip')
-    model = PPO.load('../eval_models/' + filename)
+    model = PPO.load('../eval_models/' + filename, env=env, custom_objects={'observation_space': env.observation_space, 'action_space': env.action_space})
 
     # Play episodes
     playNEpisodes(10, env, model, max_steps)

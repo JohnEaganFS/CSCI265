@@ -81,7 +81,7 @@ def defineActionSpace():
 
 ### Environment ###
 class RacingEnv(gym.Env):
-    def __init__(self, maps, max_steps, num_agents, model=None, evaluating=False, model_filename=None):
+    def __init__(self, maps, max_steps, num_agents, model=None, evaluating=False, model_filename=None, obs_space_temp=None, act_space_temp=None):
         # Initialize environment variables (should not change)
         self.maps = maps
         self.max_steps = max_steps
@@ -90,6 +90,8 @@ class RacingEnv(gym.Env):
         self.other_agent = model
         self.observation_space = defineObservationSpace()
         self.action_space = defineActionSpace()
+        self.obs_space_temp = obs_space_temp
+        self.act_space_temp = act_space_temp
         self.evaluating = evaluating
         self.model_filename = model_filename
 
@@ -281,20 +283,24 @@ class RacingEnv(gym.Env):
         other_agent = self.other_agent
         evaluating = self.evaluating
         model_filename = self.model_filename
+        obs_space_temp = self.obs_space_temp
+        act_space_temp = self.act_space_temp
         # Clear all self variables (except maps)
         self.__dict__.clear()
         self.maps = maps
         self.max_steps = max_steps
         self.num_agents = num_agents
         self.current_map = current_map
+        self.observation_space = defineObservationSpace()
+        self.action_space = defineActionSpace()
+        self.obs_space_temp = obs_space_temp
+        self.act_space_temp = act_space_temp
         if evaluating:
-            self.other_agent = PPO.load('../eval_models/' + model_filename)
+            self.other_agent = PPO.load('../eval_models/' + model_filename, custom_objects={'observation_space': self.obs_space_temp, 'action_space': self.act_space_temp})
             # self.other_agent = PPO.load('../eval_models/good_models/comp_model.zip')
         else:
             # self.other_agent = other_agent
             self.other_agent = PPO.load('../eval_models/temp_model.zip')
-        self.observation_space = defineObservationSpace()
-        self.action_space = defineActionSpace()
         self.evaluating = evaluating
         self.model_filename = model_filename
 
@@ -601,7 +607,7 @@ def playNEpisodes(n, env, model, max_steps=1000):
             total_reward += reward
 
             pygame.display.update()
-            # pygame.time.Clock().tick(100)
+            pygame.time.Clock().tick(200)
 
             if done:
                 print(f'Episode {episode} finished after {step} steps with reward {total_reward}')
