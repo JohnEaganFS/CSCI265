@@ -24,8 +24,8 @@ from stable_baselines3.common.vec_env import VecFrameStack
 # num_agents = 2
 
 # Multi-Agent (Draft)
-agent_1 = 320000
-agent_2 = 320000
+agent_1 = 800000
+agent_2 = 800000
 filename = "/checkpoints_run2/comp_model_" + str(agent_1) + "_steps.zip"
 other_agent_filename = "/checkpoints_run2/comp_model_" + str(agent_2) + "_steps.zip"
 num_agents = 2

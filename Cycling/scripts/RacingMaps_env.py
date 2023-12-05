@@ -29,9 +29,24 @@ import pickle
 
 # Custom (other scripts)
 from read_gpx import read_gpx, removeDuplicatePoints, scaleData
-from CustomRacing2D_env import draw_waypoints
 
 ### Misc. Functions ###
+def draw_waypoints(screen, waypoints, current_waypoint, next_waypoint):
+    for i, waypoint in enumerate(waypoints):
+        # Make the current waypoint red
+        if i == current_waypoint:
+            color = (0, 0, 255)
+        # Make the next waypoint green
+        elif i == next_waypoint:
+            color = (0, 255, 0)
+        # Make completed waypoints blue
+        elif i < current_waypoint:
+            color = (0, 0, 255)
+        # Make future waypoints white
+        else:
+            color = (255, 255, 255)
+        pygame.draw.circle(screen, color, (int(waypoint[0]), int(waypoint[1])), 4)
+
 def initialize_pygame(width, height):
     # Initialize pygame
     pygame.init()

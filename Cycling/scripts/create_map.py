@@ -12,7 +12,6 @@ from pymunk.vec2d import Vec2d
 
 # Custom (other scripts)
 from read_gpx import read_gpx, removeDuplicatePoints, scaleData
-from CustomRacing2D_env import define_boundaries
 
 ### Global Variables ###
 # Pygame parameters
@@ -46,6 +45,23 @@ def select_points(points, total_points):
 def sample_func(point):
     x, y = int(point[0]), int(point[1])
     return pixel_values[x, y]
+
+def define_boundaries(points, scale):
+    # Initialize boundary_points
+    boundary_points = []
+
+    # Create boundaries
+    for i in range(len(points) - 1):
+        A = np.array([points[i][0], points[i][1]])
+        B = np.array([points[i + 1][0], points[i + 1][1]])
+        a, b, c, d = boundaries(A, B, scale)
+        # For the first point, define itself and the next point
+        if i == 0:
+            boundary_points.append((a, b))
+        # For all other points, only define the next point (the current point has already been defined by the previous iteration)
+        boundary_points.append((c, d))
+    
+    return boundary_points
 
 # Pygame functions
 def pygame_init():

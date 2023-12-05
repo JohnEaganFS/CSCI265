@@ -35,7 +35,7 @@ import pickle
 # Custom (other scripts)
 from misc_functions import *
 from read_gpx import read_gpx, removeDuplicatePoints, scaleData
-from RacingMaps_env import RacingEnv as RacingEnvMaps
+# from RacingMaps_env import RacingEnv as RacingEnvMaps
 
 ### Global Variables ###
 # Model parameters
