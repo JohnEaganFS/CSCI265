@@ -50,7 +50,7 @@ hyperparameters = {
     'batch_size': 1024,
     'gamma': 0.99,
     'vf_coef': 0.5,
-    # 'learning_rate': 0.0001,
+    'learning_rate': 0.0003,
     'gae_lambda': 0.95,
     'clip_range': 0.2
 }
@@ -263,6 +263,12 @@ class RacingEnv(gym.Env):
         # Resize the surface back to the observation size
         observation = pygame.transform.scale(observation, (self.observation_size, self.observation_size))
         observation = pygame.surfarray.pixels3d(observation)
+
+        # Draw the observation at the bottom left of the screen (scaled up a bit for visualization)
+        scale = 3
+        observation_display = pygame.Surface((self.observation_size * scale, self.observation_size * scale))
+        observation_display.blit(pygame.transform.scale(pygame.surfarray.make_surface(np.transpose(observation, (1, 0, 2))), (self.observation_size * scale, self.observation_size * scale)), (0, 0))
+        self.screen.blit(observation_display, (0, self.screen_size[1] - self.observation_size * scale))
 
         # Randomly (approximately every 20 frames) do this
         # if np.random.randint(0, 50) == 0 and agent_id == 0:
