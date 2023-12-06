@@ -302,11 +302,9 @@ class RacingEnv(gym.Env):
         self.obs_space_temp = obs_space_temp
         self.act_space_temp = act_space_temp
         if evaluating:
-            self.other_agent = PPO.load('../eval_models/' + model_filename, custom_objects={'observation_space': self.obs_space_temp, 'action_space': self.act_space_temp})
-            # self.other_agent = PPO.load('../eval_models/good_models/comp_model.zip')
+            self.other_agent = PPO.load('../test_models/' + model_filename, custom_objects={'observation_space': self.obs_space_temp, 'action_space': self.act_space_temp})
         else:
-            # self.other_agent = other_agent
-            self.other_agent = PPO.load('../eval_models/temp_model.zip')
+            self.other_agent = PPO.load('../test_models/temp_model.zip')
         self.evaluating = evaluating
         self.model_filename = model_filename
 
@@ -317,7 +315,6 @@ class RacingEnv(gym.Env):
             self.current_map = self.maps[0]
         elif self.evaluating:
             self.current_map = self.maps[(self.maps.index(self.current_map) + 1) % len(self.maps)]
-            # self.other_agent = PPO.load('../eval_models/temp_model.zip')
         else:
             self.current_map = random_map
         self.setup()
@@ -699,11 +696,10 @@ if __name__ == "__main__":
     action_space = old_env.action_space
 
     # Load the pretrained model
-    # pretrained_model = PPO.load('../eval_models/best_model_temp.zip', env=old_env, custom_objects={'observation_space': observation_space, 'action_space': action_space}, device="cuda")
     pretrained_model = PPO("CnnPolicy", old_env, verbose=1, device="cuda")
 
     # Save the pretrained model to temp_model.zip
-    pretrained_model.save('../eval_models/temp_model')
+    pretrained_model.save('../test_models/temp_model')
 
     # Initialize environment
     env = RacingEnv(maps, max_steps, num_agents, pretrained_model)
@@ -712,16 +708,8 @@ if __name__ == "__main__":
     # Frame stack
     vec_env = VecFrameStack(vec_env, n_stack=3)
 
-    # Policy Args
-    # policy_kwargs = dict(
-    #     features_extractor_class=CustomCNN,
-    #     features_extractor_kwargs=dict(features_dim=32)
-    # )
-
     # Create model
     model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda", **hyperparameters, tensorboard_log="../logs/")
-    # model = PPO.load('../eval_models/best_model.zip', env=vec_env, device="cuda", **hyperparameters, tensorboard_log="../logs/")
-    # model = PPO("CnnPolicy", vec_env, verbose=1, policy_kwargs=policy_kwargs)
 
     # Callback envs
     eval_env = RacingEnv(maps, max_steps, num_agents, pretrained_model)
@@ -734,5 +722,3 @@ if __name__ == "__main__":
 
     # Train model
     model.learn(total_timesteps=total_timesteps, callback=[eval_callback, checkpoint_callback], progress_bar=True, tb_log_name="multi_no_draft")
-
-    print("Hello, world!")
