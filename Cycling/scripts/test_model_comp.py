@@ -10,6 +10,10 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecFrameStack
 
+### To test the models, comment/uncomment the following lines
+# You can adjust the model based on the number of timesteps it was trained for (increments of 10,000)
+# You can also adjust the number of agents
+
 # Single-Agent
 # agent_1 = 630000
 # filename = "/single_agent/comp_model_" + str(agent_1) + "_steps.zip"
@@ -17,6 +21,7 @@ from stable_baselines3.common.vec_env import VecFrameStack
 # num_agents = 1
 
 # Multi-Agent (No Draft)
+# For this scenario, the checkpoint models were not saved due to a write-error (some temp models were kept and are provided)
 # filename = "/multi_no_draft/temp_model copy 3.zip"
 # other_agent_filename = "/multi_no_draft/temp_model copy 3.zip"
 # num_agents = 2
@@ -27,7 +32,6 @@ agent_2 = 800000
 filename = "/multi_draft/comp_model_" + str(agent_1) + "_steps.zip"
 other_agent_filename = "/multi_draft/comp_model_" + str(agent_2) + "_steps.zip"
 num_agents = 2
-
 
 max_steps = 2000
 

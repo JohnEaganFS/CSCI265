@@ -1,6 +1,14 @@
-# Ideas:
-# 1. No map rotation, just with arrow tip
-# 2. Energy limitation, coop by being close to other car (use less energy)
+# Future Ideas:
+# - Complex state of environment and agents (obstacles, friction, wind direction, etc.)
+# - Complex action space (steering, throttle, braking, etc.)
+# - Hyperparameter tuning (mostly intuitive for now)
+#     - Local Optima "tips"
+#     - Large, diverse batches of training seem to keep the model from overfitting early on
+#     - Increased entropy coefficient obviously helps with exploration, but definitely needs some kind of annealing
+#     - Learning rate needs to be very small most of the time
+#     - Not sure why epsilon = 0.2 works so well but it does
+# - Information Sharing between agents (maybe a shared value network that observes all local observations or even the whole environment)
+# - Teams of agents (need to look into how "hard" this is, papers suggest even the two agent case can be NP-hard)
 
 ### Imports ###
 # Standard
@@ -8,7 +16,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.path as mplPath
 from typing import Callable
-import time
 from cProfile import Profile
 
 # PyTorch
@@ -21,6 +28,7 @@ from gym import spaces
 
 # SB3
 from stable_baselines3 import PPO
+from PPO_custom import *
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -35,7 +43,6 @@ import pickle
 # Custom (other scripts)
 from misc_functions import *
 from read_gpx import read_gpx, removeDuplicatePoints, scaleData
-# from RacingMaps_env import RacingEnv as RacingEnvMaps
 
 ### Global Variables ###
 # Model parameters
@@ -270,18 +277,13 @@ class RacingEnv(gym.Env):
         observation_display.blit(pygame.transform.scale(pygame.surfarray.make_surface(np.transpose(observation, (1, 0, 2))), (self.observation_size * scale, self.observation_size * scale)), (0, 0))
         self.screen.blit(observation_display, (0, self.screen_size[1] - self.observation_size * scale))
 
-        # Randomly (approximately every 20 frames) do this
-        # if np.random.randint(0, 50) == 0 and agent_id == 0:
-        #     print("Agent", agent_id)
-        #     plt.imshow(observation)
-        #     plt.show()
-
         # Convert to CxHxW
         observation = np.transpose(observation, (2, 0, 1))
 
         return observation
 
     def reset(self):
+        # The following is a dumb solution, but it works
         maps = self.maps
         max_steps = self.max_steps
         num_agents = self.num_agents
@@ -307,7 +309,6 @@ class RacingEnv(gym.Env):
             self.other_agent = PPO.load('../test_models/temp_model.zip')
         self.evaluating = evaluating
         self.model_filename = model_filename
-
 
         random_map = np.random.choice(self.maps)
         # Update map to next map
@@ -347,9 +348,6 @@ class RacingEnv(gym.Env):
                 # Update previous two observations
                 self.state['previous_two_observations'][i][0] = self.state['previous_two_observations'][i][1]
                 self.state['previous_two_observations'][i][1] = current_obs
-            # else:
-            #     if i != 0:
-            #         print("Not predicting for car", i, "because of collision")
             if not(self.state['other_car_collisions'][i]):
                 # Get new heading
                 new_heading = getNewHeading(self.state['headings'][i], steer)
@@ -373,11 +371,8 @@ class RacingEnv(gym.Env):
                 behind = self.state['current_waypoints'][i] < first_place_waypoint or (self.state['current_waypoints'][i] == first_place_waypoint and current_car_dist_to_next_waypoint > smallest_dist)
                 if behind and dist_to_other_car < 30:
                     # print("Agent", i, "is drafting")
-                    car.velocity *= 1.2
-
-
-        # if self.speed_limit > 30 and abs(distance_to_other_car) > 20:
-        #     print("Speed limit:", self.speed_limit)
+                    # car.velocity *= 1.1 # Actual
+                    car.velocity *= 1.2 # Testing
 
         # Update space
         self.space.step(1/FPS)
@@ -389,32 +384,14 @@ class RacingEnv(gym.Env):
 
         # Update steps left
         self.steps_left -= 1
-        # self.state['steps_since_last_waypoints'][0] += 1
-
-        # If in an earlier waypoint than the other car or behind it, increment time step since last waypoint
-        # current_car_waypoint = self.state['current_waypoints'][0]
-        # other_car_waypoint = self.state['current_waypoints'][1]
-        # cc_dist_to_next_waypoint = np.linalg.norm(self.state['positions'][0] - self.points[self.state['next_waypoints'][0]])
-        # oc_dist_to_next_waypoint = np.linalg.norm(self.state['positions'][1] - self.points[self.state['next_waypoints'][1]])
-
-        # if current_car_waypoint < other_car_waypoint or (current_car_waypoint == other_car_waypoint and cc_dist_to_next_waypoint > oc_dist_to_next_waypoint):
-        #     self.state['steps_since_last_waypoints'][0] += 1
 
         ### Reward Shaping ###
         # Check for reward gained from passing through waypoints
         reward += self.waypoint_reward
-        # if self.waypoint_reward > 0:
-        #     # Penalize the agent for moving too far away from other agent (scale to)
-        #     # If the distance is greater than 30, penalize the agent
-        #     if distance_to_other_car < 30 and not(self.state['other_car_collision']):
-        #         reward = reward * 2
         self.waypoint_reward = 0
 
         # Check for wall collision penalty
         reward += self.collision_penalty
-        # if self.collision_penalty < 0:
-        #     self.collision_amount += 1
-            # print("hey")
         self.collision_penalty = 0
 
         # Check for done
@@ -435,21 +412,11 @@ class RacingEnv(gym.Env):
 
         # if checks[2] or checks[0]:
         if checks[0] or checks[2] or checks[3]:
-            # If run out of steps or haven't passed through a waypoint in a while, penalize the agent by removing the reward gained from passing through waypoints
-            # total_reward = sum(self.reward_history)
-            # # print("Total reward:", total_reward)
-            # if total_reward > 0:
-            #     reward -= total_reward * 0.5
             reward -= 50
         elif checks[1]:
             reward += 100
 
         observation = self.observation(0)
-        # pygame.display.flip()
-        # self.clock.tick(30)
-
-        # if abs(reward) > 0.01:
-        #     print("Reward:", reward)
 
         # Update reward history
         if reward > 0:
@@ -458,7 +425,7 @@ class RacingEnv(gym.Env):
         # Return observation, reward, done, info
         return observation, reward, done, {}
 
-    def render(self):
+    def render(self): # This is not functioning, but it is not necessary for training
         while True:
             # Handle events
             for event in pygame.event.get():
@@ -481,8 +448,6 @@ class RacingEnv(gym.Env):
             draw_waypoint_segments(self.screen, self.points)
             # Draw walls
             draw_walls(self.screen, self.walls)
-
-
             # Draw car
             car_pos = self.car.position
             pygame.draw.circle(self.screen, (255, 255, 0), (int(car_pos[0]), int(car_pos[1])), 2)
@@ -684,9 +649,7 @@ class EveryUpdateCallback(BaseCallback):
 
 ### Main ###
 if __name__ == "__main__":
-    # maps = ["../maps/map_10_30_800_800.pkl"]#, "../maps/map_50_70_800_800.pkl", "../maps/map_70_90_800_800.pkl"]
-    # maps = ["../maps/map_30_50_800_800.pkl"]
-    maps = ["../maps/map_70_90_800_800.pkl"]
+    maps = ["../maps/map_70_90_800_800.pkl"] # Used for training (probably overfitting, but proof of concept)
 
     # Define observation and action spaces
     old_env = RacingEnv(maps, max_steps, num_agents)
@@ -695,10 +658,11 @@ if __name__ == "__main__":
     observation_space = old_env.observation_space
     action_space = old_env.action_space
 
-    # Load the pretrained model
+    # Load the pretrained model (can be whatever model, just need it for reference of other agent in multi-agent environments)
+    # Using randomly initialized model for now
     pretrained_model = PPO("CnnPolicy", old_env, verbose=1, device="cuda")
 
-    # Save the pretrained model to temp_model.zip
+    # Save the pretrained model to temp_model.zip for loading later as other_agent
     pretrained_model.save('../test_models/temp_model')
 
     # Initialize environment
@@ -709,7 +673,12 @@ if __name__ == "__main__":
     vec_env = VecFrameStack(vec_env, n_stack=3)
 
     # Create model
+    # Comparing SB3 to custom implementation
     model = PPO("CnnPolicy", vec_env, verbose=1, device="cuda", **hyperparameters, tensorboard_log="../logs/")
+    # model = PPO_custom("CnnPolicy", vec_env, verbose=1, device="cuda", **hyperparameters, tensorboard_log="../logs/")
+
+    # Note: Custom implementation is significantly slower than SB3 (10k/~10min vs 10k/~1min)
+    # Probably code-level optimizations and/or better CUDA utilization in vectorized environments
 
     # Callback envs
     eval_env = RacingEnv(maps, max_steps, num_agents, pretrained_model)
