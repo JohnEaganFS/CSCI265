@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     # Create space
     space = pymunk.Space()
-    space.gravity = 0, -100
+    space.gravity = 0, -150
 
     # Define balls list
     balls = []
